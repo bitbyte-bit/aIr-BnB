@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-size: 80%; /* Minimise all elements size by 20% */
+  }
+}

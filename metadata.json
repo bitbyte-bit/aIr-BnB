@@ -1,0 +1,8 @@
+{
+  "name": "Vitu",
+  "description": "A native-look PWA for engaging with admin-posted items, featuring user profiles, real-time engagement via WebSockets, and a comprehensive admin dashboard with analytics.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
