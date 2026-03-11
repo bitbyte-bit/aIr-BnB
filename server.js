@@ -171,11 +171,12 @@ const io = new Server(httpServer, {
 
 app.use(express.json({ limit: '50mb' }));
 
+// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Auth Routes
+// API Routes (all /api/* routes)
 app.post("/api/auth/signup", (req, res) => {
   const { email, password, name } = req.body;
   try {
@@ -547,11 +548,20 @@ app.get("/api/search", (req, res) => {
   }
 });
 
-// Serve static files in production
-app.use(express.static(path.join(__dirname, "dist")));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
+// Vite middleware for development
+if (process.env.NODE_ENV !== "production") {
+  const vite = await createViteServer({
+    server: { middlewareMode: true },
+    appType: "spa",
+  });
+  app.use(vite.middlewares);
+} else {
+  // Serve static files in production
+  app.use(express.static(path.join(__dirname, "dist")));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(__dirname, "dist", "index.html"));
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, "0.0.0.0", () => {
