@@ -13,21 +13,27 @@ const __dirname = path.dirname(__filename);
 
 const db = new Database("vitu.db");
 
+// Enable foreign keys
+db.pragma("foreign_keys = OFF");
+
 // Schema migration: Ensure items and messages use TEXT IDs
 try {
+  db.exec("PRAGMA foreign_keys = OFF");
   const itemsInfo = db.prepare("PRAGMA table_info(items)").all();
   if (itemsInfo.length > 0 && itemsInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
-    db.exec("DROP TABLE IF EXISTS items");
-    db.exec("DROP TABLE IF EXISTS likes"); 
+    db.exec("DROP TABLE IF EXISTS likes");
     db.exec("DROP TABLE IF EXISTS comments");
+    db.exec("DROP TABLE IF EXISTS items");
   }
 
   const messagesInfo = db.prepare("PRAGMA table_info(messages)").all();
   if (messagesInfo.length > 0 && messagesInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
     db.exec("DROP TABLE IF EXISTS messages");
   }
+  db.exec("PRAGMA foreign_keys = ON");
 } catch (e) {
   console.error("Migration error:", e);
+  db.exec("PRAGMA foreign_keys = ON");
 }
 
 // Initialize Database
