@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
 import { Item, User, Comment, Business, Message } from '../types';
@@ -7,8 +7,8 @@ import { Item, User, Comment, Business, Message } from '../types';
 export default function Home({ user }: { user: User }) {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeComments, setActiveComments] = useState<number | null>(null);
-  const [comments, setComments] = useState<Record<number, Comment[]>>({});
+  const [activeComments, setActiveComments] = useState<string | null>(null);
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
@@ -21,14 +21,19 @@ export default function Home({ user }: { user: User }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
+  const [liveActivities, setLiveActivities] = useState<{ id: number; text: string; type: string }[]>([]);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<{ items: Item[]; businesses: Business[] } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     fetchItems();
 
-    socket.on('engagement', ({ itemId, type, count, comment }) => {
+    socket.on('engagement', ({ itemId, type, count, comment, userName }) => {
       if (type === 'like') {
         setItems(prev => prev.map(item => 
-          item.id === parseInt(itemId) ? { ...item, likes: count } : item
+          item.id === itemId ? { ...item, likes: count } : item
         ));
       } else if (type === 'comment') {
         setComments(prev => ({
@@ -36,6 +41,16 @@ export default function Home({ user }: { user: User }) {
           [itemId]: [...(prev[itemId] || []), comment]
         }));
       }
+
+      // Live Activity Toast
+      const activityId = Date.now();
+      const item = items.find(i => i.id === itemId);
+      const activityText = type === 'like' 
+        ? `${userName || 'Someone'} liked ${item?.title || 'an item'}`
+        : `${userName || 'Someone'} commented on ${item?.title || 'an item'}`;
+      
+      setLiveActivities(prev => [...prev, { id: activityId, text: activityText, type }]);
+      setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
     });
 
     socket.on('message', (msg: Message) => {
@@ -44,15 +59,25 @@ export default function Home({ user }: { user: User }) {
       }
     });
 
+    socket.on('notification', (data) => {
+      if (data.receiver_id === user.id) {
+        const activityId = Date.now();
+        setLiveActivities(prev => [...prev, { id: activityId, text: data.text, type: 'notification' }]);
+        setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
+      }
+    });
+
     return () => {
       socket.off('engagement');
       socket.off('message');
+      socket.off('notification');
     };
-  }, [selectedBusiness]);
+  }, [selectedBusiness, items, user.id]);
 
   const fetchItems = async () => {
     try {
       const res = await fetch('/api/items');
+      if (!res.ok) throw new Error('Failed to fetch items');
       const data = await res.json();
       setItems(data);
     } catch (err) {
@@ -62,10 +87,11 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const fetchComments = async (itemId: number) => {
+  const fetchComments = async (itemId: string) => {
     if (comments[itemId]) return;
     try {
       const res = await fetch(`/api/items/${itemId}/comments`);
+      if (!res.ok) throw new Error('Failed to fetch comments');
       const data = await res.json();
       setComments(prev => ({ ...prev, [itemId]: data }));
     } catch (err) {
@@ -73,7 +99,7 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const handleLike = async (itemId: number) => {
+  const handleLike = async (itemId: string) => {
     try {
       await fetch(`/api/items/${itemId}/like`, {
         method: 'POST',
@@ -85,7 +111,7 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const handlePostComment = async (itemId: number) => {
+  const handlePostComment = async (itemId: string) => {
     if (!newComment.trim()) return;
     try {
       const res = await fetch(`/api/items/${itemId}/comments`, {
@@ -119,7 +145,7 @@ export default function Home({ user }: { user: User }) {
         setComments(prev => {
           const newComments = { ...prev };
           Object.keys(newComments).forEach(itemId => {
-            newComments[parseInt(itemId)] = newComments[parseInt(itemId)].map(c => 
+            newComments[itemId] = newComments[itemId].map(c => 
               c.id === commentId ? { ...c, text: editText } : c
             );
           });
@@ -133,7 +159,7 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const toggleComments = (itemId: number) => {
+  const toggleComments = (itemId: string) => {
     if (activeComments === itemId) {
       setActiveComments(null);
       setReplyTo(null);
@@ -143,15 +169,18 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const openBusinessProfile = async (businessId: number) => {
+  const openBusinessProfile = async (businessId: string) => {
     try {
       const res = await fetch(`/api/businesses/${businessId}`);
+      if (!res.ok) throw new Error('Failed to fetch business');
       const data = await res.json();
       setSelectedBusiness(data);
       
       const followRes = await fetch(`/api/businesses/${businessId}/follow-status/${user.id}`);
-      const followData = await followRes.json();
-      setIsFollowing(followData.isFollowing);
+      if (followRes.ok) {
+        const followData = await followRes.json();
+        setIsFollowing(followData.isFollowing);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -214,6 +243,25 @@ export default function Home({ user }: { user: User }) {
       const reader = new FileReader();
       reader.onloadend = () => setAttachment(reader.result as string);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json();
+      setSearchResults(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -282,12 +330,164 @@ export default function Home({ user }: { user: User }) {
     <div className="space-y-8">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Discover</h1>
-          <p className="text-neutral-500">Curated items for you</p>
+          <h1 className="text-3xl font-black tracking-tight text-neutral-900">Discover</h1>
+          <p className="text-neutral-500 font-medium">Find the best local services and products.</p>
         </div>
       </header>
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      {/* What are you looking for section */}
+      <section className="bg-emerald-600 rounded-[2.5rem] p-8 md:p-12 text-white shadow-xl shadow-emerald-100 overflow-hidden relative">
+        <div className="relative z-10 max-w-2xl">
+          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-none">
+            What are you <br /> looking for?
+          </h2>
+          <form onSubmit={handleSearch} className="relative group">
+            <input
+              type="text"
+              placeholder="Search for retailers, motor spares, food..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-6 pr-16 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder:text-white/60 focus:bg-white focus:text-neutral-900 focus:placeholder:text-neutral-400 outline-none transition-all shadow-lg"
+            />
+            <button 
+              type="submit"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-white text-emerald-600 rounded-xl hover:scale-105 active:scale-95 transition-all shadow-md group-focus-within:bg-emerald-600 group-focus-within:text-white"
+            >
+              {isSearching ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Plus size={20} />}
+            </button>
+          </form>
+          <div className="flex flex-wrap gap-2 mt-6">
+            {['Retailer', 'Motor Spare', 'Blocker', 'Repairer', 'Transporter', 'Food Deliverer'].map(tag => (
+              <button 
+                key={tag}
+                onClick={() => { setSearchQuery(tag); }}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-full text-xs font-bold transition-colors border border-white/10"
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+        {/* Decorative elements */}
+        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-400/20 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
+      </section>
+
+      {/* Live Activity Toasts */}
+      <div className="fixed bottom-24 left-4 z-50 flex flex-col gap-2 pointer-events-none">
+        <AnimatePresence>
+          {liveActivities.map((activity) => (
+            <motion.div
+              key={activity.id}
+              initial={{ opacity: 0, x: -20, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.9 }}
+              className="bg-white/90 backdrop-blur-md border border-neutral-200 px-4 py-3 rounded-2xl shadow-lg flex items-center gap-3 min-w-[200px]"
+            >
+              <div className={`p-2 rounded-full ${activity.type === 'like' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                {activity.type === 'like' ? <Heart size={14} fill="currentColor" /> : <MessageCircle size={14} />}
+              </div>
+              <p className="text-xs font-bold text-neutral-800">{activity.text}</p>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      {searchResults ? (
+        <div className="space-y-10">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-bold text-neutral-900">Search Results for "{searchQuery}"</h3>
+            <button 
+              onClick={() => { setSearchResults(null); setSearchQuery(''); }}
+              className="text-sm font-bold text-emerald-600 hover:underline"
+            >
+              Clear Results
+            </button>
+          </div>
+
+          {searchResults.businesses.length > 0 && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Businesses</h4>
+              <div className="grid gap-4 md:grid-cols-2">
+                {searchResults.businesses.map(biz => (
+                  <motion.div
+                    key={biz.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => openBusinessProfile(biz.id)}
+                    className="bg-white p-4 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-4"
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                      {biz.logo ? (
+                        <img src={biz.logo} alt={biz.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-neutral-400"><Briefcase size={24} /></div>
+                      )}
+                    </div>
+                    <div>
+                      <h5 className="font-bold text-neutral-900">{biz.name}</h5>
+                      <p className="text-xs text-neutral-500 line-clamp-1">{biz.description}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded-md uppercase tracking-wider">{biz.type}</span>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchResults.items.length > 0 && (
+            <div className="space-y-4">
+              <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Products & Services</h4>
+              <div className="grid gap-6 sm:grid-cols-2">
+                {searchResults.items.map(item => (
+                  <div key={item.id} className="bg-white rounded-[2.5rem] border border-neutral-200 overflow-hidden shadow-sm hover:shadow-xl transition-all group">
+                    <div className="relative aspect-square overflow-hidden">
+                      <img 
+                        src={item.image_url} 
+                        alt={item.title} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <button 
+                        onClick={() => handleLike(item.id)}
+                        className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 hover:bg-emerald-600 hover:text-white transition-all shadow-lg"
+                      >
+                        <Heart size={20} className={item.likes ? 'fill-current' : ''} />
+                      </button>
+                    </div>
+                    <div className="p-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <button 
+                          onClick={() => item.business_id && openBusinessProfile(item.business_id)}
+                          className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
+                        >
+                          {item.business_name}
+                        </button>
+                      </div>
+                      <h3 className="text-xl font-bold text-neutral-900 mb-2">{item.title}</h3>
+                      <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-4">{item.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {searchResults.items.length === 0 && searchResults.businesses.length === 0 && (
+            <div className="text-center py-20 bg-neutral-100 rounded-[2.5rem] border-2 border-dashed border-neutral-200">
+              <div className="w-16 h-16 bg-neutral-200 rounded-full flex items-center justify-center mx-auto mb-4 text-neutral-400">
+                <X size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-neutral-900">No results found</h3>
+              <p className="text-neutral-500">Try searching for something else or check your spelling.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2">
         {items.map((item) => (
           <motion.div
             key={item.id}
@@ -399,6 +599,7 @@ export default function Home({ user }: { user: User }) {
           </motion.div>
         ))}
       </div>
+      )}
 
       {/* Business Profile Modal */}
       <AnimatePresence>
@@ -559,116 +760,150 @@ export default function Home({ user }: { user: User }) {
           </motion.div>
         )}
       </AnimatePresence>
-      {/* Product Detail Modal */}
+      {/* Product Detail Modal - Full Window */}
       <AnimatePresence>
         {selectedItem && (
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-0 z-[60] bg-white flex flex-col"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-2xl rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
-            >
-              <div className="relative h-64 bg-neutral-100">
-                <img 
-                  src={selectedItem.image_url || `https://picsum.photos/seed/${selectedItem.id}/1200/800`} 
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+            {/* Header */}
+            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-bottom border-neutral-100 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedItem(null)}
-                  className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
+                  className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
                 >
-                  <X size={20} />
+                  <X size={24} />
+                </button>
+                <h2 className="text-lg font-black text-neutral-900 truncate max-w-[200px] md:max-w-md">
+                  {selectedItem.title}
+                </h2>
+              </div>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => handleLike(selectedItem.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-neutral-100 hover:bg-neutral-200 rounded-full transition-colors"
+                >
+                  <Heart size={18} className={selectedItem.likes ? "fill-red-500 text-red-500" : "text-neutral-600"} />
+                  <span className="text-sm font-bold">{selectedItem.likes || 0}</span>
                 </button>
               </div>
+            </div>
 
-              <div className="p-8 overflow-y-auto flex-1 custom-scrollbar">
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <h2 className="text-3xl font-bold text-neutral-900 mb-2">{selectedItem.title}</h2>
-                    {selectedItem.business_name && (
-                      <button 
-                        onClick={() => { setSelectedItem(null); openBusinessProfile(selectedItem.business_id!); }}
-                        className="flex items-center gap-1 text-xs font-bold text-emerald-600 uppercase tracking-widest hover:underline"
-                      >
-                        By {selectedItem.business_name}
-                        {selectedItem.is_approved ? <CheckCircle size={14} className="fill-emerald-100" /> : null}
-                      </button>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleLike(selectedItem.id)}
-                    className="flex flex-col items-center gap-1 text-neutral-400 hover:text-red-500 transition-colors"
-                  >
-                    <Heart size={24} className={selectedItem.likes ? "fill-red-500 text-red-500" : ""} />
-                    <span className="text-xs font-bold">{selectedItem.likes || 0}</span>
-                  </button>
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+              <div className="max-w-4xl mx-auto">
+                {/* Hero Image */}
+                <div className="relative aspect-video md:aspect-[21/9] bg-neutral-100 overflow-hidden md:rounded-b-[3rem]">
+                  <img 
+                    src={selectedItem.image_url || `https://picsum.photos/seed/${selectedItem.id}/1200/800`} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 </div>
 
-                <p className="text-neutral-600 leading-relaxed mb-8">{selectedItem.description}</p>
-
-                {/* Gallery */}
-                {selectedItem.gallery && (
-                  <div className="mb-8">
-                    <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-4">Product Gallery</h4>
-                    <div className="grid grid-cols-3 gap-4">
-                      {JSON.parse(selectedItem.gallery).map((img: string, i: number) => (
-                        <div key={i} className="aspect-square rounded-2xl overflow-hidden border border-neutral-100">
-                          <img src={img} className="w-full h-full object-cover hover:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
-                        </div>
-                      ))}
+                <div className="p-6 md:p-12">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-8 mb-12">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-4">
+                        {selectedItem.business_name && (
+                          <button 
+                            onClick={() => { setSelectedItem(null); openBusinessProfile(selectedItem.business_id!); }}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-full text-xs font-black uppercase tracking-widest hover:bg-emerald-100 transition-colors"
+                          >
+                            {selectedItem.business_name}
+                            {selectedItem.is_approved ? <CheckCircle size={14} className="fill-emerald-100" /> : null}
+                          </button>
+                        )}
+                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                          {new Date(selectedItem.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h1 className="text-4xl md:text-6xl font-black text-neutral-900 mb-6 leading-tight">
+                        {selectedItem.title}
+                      </h1>
+                      <p className="text-lg text-neutral-600 leading-relaxed">
+                        {selectedItem.description}
+                      </p>
                     </div>
                   </div>
-                )}
 
-                {/* Custom Fields */}
-                {selectedItem.custom_fields && (
-                  <div className="mb-8">
-                    <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-4">Specifications</h4>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {Object.entries(JSON.parse(selectedItem.custom_fields)).map(([key, value]) => (
-                        <div key={key} className="flex items-center justify-between p-4 bg-neutral-50 rounded-2xl border border-neutral-100">
-                          <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">{key}</span>
-                          <span className="text-sm font-bold text-neutral-900">{(value as string)}</span>
+                  {/* Gallery Grid */}
+                  {selectedItem.gallery && (
+                    <div className="mb-16">
+                      <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <div className="h-px flex-1 bg-neutral-100"></div>
+                        Product Gallery
+                        <div className="h-px flex-1 bg-neutral-100"></div>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {JSON.parse(selectedItem.gallery).map((img: string, i: number) => (
+                          <motion.div 
+                            key={i} 
+                            whileHover={{ scale: 1.02 }}
+                            className="aspect-square rounded-[2rem] overflow-hidden border border-neutral-100 shadow-sm"
+                          >
+                            <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </motion.div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Specifications */}
+                  {selectedItem.custom_fields && (
+                    <div className="mb-16">
+                      <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-6 flex items-center gap-2">
+                        <div className="h-px flex-1 bg-neutral-100"></div>
+                        Specifications
+                        <div className="h-px flex-1 bg-neutral-100"></div>
+                      </h4>
+                      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {Object.entries(JSON.parse(selectedItem.custom_fields)).map(([key, value]) => (
+                          <div key={key} className="p-6 bg-neutral-50 rounded-[2rem] border border-neutral-100">
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">{key}</p>
+                            <p className="text-lg font-black text-neutral-900">{(value as string)}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Discussion */}
+                  <div className="pt-16 border-t border-neutral-100">
+                    <div className="max-w-2xl mx-auto">
+                      <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-8 text-center">Discussion</h4>
+                      
+                      <div className="mb-12">
+                        <div className="flex gap-3 p-2 bg-neutral-50 border border-neutral-200 rounded-[1.5rem] focus-within:ring-2 focus-within:ring-emerald-500 transition-all">
+                          <input
+                            type="text"
+                            placeholder="Share your thoughts..."
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handlePostComment(selectedItem.id)}
+                            className="flex-1 px-4 py-3 bg-transparent outline-none text-sm"
+                          />
+                          <button
+                            onClick={() => handlePostComment(selectedItem.id)}
+                            className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-all active:scale-95"
+                          >
+                            <Send size={20} />
+                          </button>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      </div>
 
-                {/* Comments Section in Modal */}
-                <div className="pt-8 border-t border-neutral-100">
-                  <h4 className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-6">Discussion</h4>
-                  <div className="space-y-4">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Add a comment..."
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handlePostComment(selectedItem.id)}
-                        className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                      />
-                      <button
-                        onClick={() => handlePostComment(selectedItem.id)}
-                        className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                      >
-                        <Send size={18} />
-                      </button>
-                    </div>
-                    <div className="space-y-4">
-                      {renderComments(selectedItem.id)}
+                      <div className="space-y-8">
+                        {renderComments(selectedItem.id)}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

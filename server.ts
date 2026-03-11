@@ -5,8 +5,26 @@ import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import * as crypto from "node:crypto";
 
 const db = new Database("vitu.db");
+
+// Schema migration: Ensure items and messages use TEXT IDs
+try {
+  const itemsInfo = db.prepare("PRAGMA table_info(items)").all() as any[];
+  if (itemsInfo.length > 0 && itemsInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
+    db.exec("DROP TABLE IF EXISTS items");
+    db.exec("DROP TABLE IF EXISTS likes"); 
+    db.exec("DROP TABLE IF EXISTS comments");
+  }
+
+  const messagesInfo = db.prepare("PRAGMA table_info(messages)").all() as any[];
+  if (messagesInfo.length > 0 && messagesInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
+    db.exec("DROP TABLE IF EXISTS messages");
+  }
+} catch (e) {
+  console.error("Migration error:", e);
+}
 
 // Initialize Database
 db.exec(`
@@ -22,7 +40,7 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     title TEXT,
     description TEXT,
     image_url TEXT,
@@ -36,9 +54,11 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS likes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER,
-    item_id INTEGER,
+    item_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(item_id) REFERENCES items(id)
+    FOREIGN KEY(item_id) REFERENCES items(id),
+    UNIQUE(user_id, item_id)
   );
 
   CREATE TABLE IF NOT EXISTS analytics (
@@ -49,7 +69,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id INTEGER,
+    item_id TEXT,
     user_id INTEGER,
     user_name TEXT,
     text TEXT,
@@ -70,17 +90,19 @@ db.exec(`
     contacts TEXT,
     social_handles TEXT,
     tel TEXT,
+    type TEXT,
     is_approved INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(owner_id) REFERENCES users(id)
   );
 
   CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT PRIMARY KEY,
     sender_id INTEGER,
     receiver_id INTEGER,
     text TEXT,
     attachment TEXT,
+    is_read INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(sender_id) REFERENCES users(id),
     FOREIGN KEY(receiver_id) REFERENCES users(id)
@@ -107,6 +129,10 @@ try { db.exec("ALTER TABLE businesses ADD COLUMN address TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN contacts TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN social_handles TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN tel TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN type TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0"); } catch (e) {}
+try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(user_id, item_id)"); } catch (e) {}
+try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 
 // Seed Master Admin
 const masterAdmin = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@gmail.com");
@@ -115,6 +141,17 @@ if (!masterAdmin) {
     "vitu@gmail.com",
     "vitu",
     "Master Admin",
+    "admin"
+  );
+}
+
+// Seed Vitu System User
+const vituUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
+if (!vituUser) {
+  db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
+    "vitu@system.com",
+    "vitu_system_secure_pass",
+    "Vitu",
     "admin"
   );
 }
@@ -129,6 +166,10 @@ async function startServer() {
   });
 
   app.use(express.json({ limit: '50mb' }));
+
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok" });
+  });
 
   // Auth Routes
   app.post("/api/auth/signup", (req, res) => {
@@ -182,9 +223,9 @@ async function startServer() {
 
   // Business Routes
   app.post("/api/businesses", (req, res) => {
-    const { ownerId, name, description, logo, address, contacts, social_handles, tel } = req.body;
+    const { ownerId, name, description, type, logo, address, contacts, social_handles, tel } = req.body;
     try {
-      const info = db.prepare("INSERT INTO businesses (owner_id, name, description, logo, address, contacts, social_handles, tel) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(ownerId, name, description, logo, address, contacts, social_handles, tel);
+      const info = db.prepare("INSERT INTO businesses (owner_id, name, description, type, logo, address, contacts, social_handles, tel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(ownerId, name, description, type, logo, address, contacts, social_handles, tel);
       res.json({ id: info.lastInsertRowid, name });
     } catch (err) {
       res.status(400).json({ error: "User already has a business or name taken" });
@@ -192,9 +233,9 @@ async function startServer() {
   });
 
   app.put("/api/businesses/:id", (req, res) => {
-    const { name, description, logo, address, contacts, social_handles, tel } = req.body;
+    const { name, description, type, logo, address, contacts, social_handles, tel } = req.body;
     try {
-      db.prepare("UPDATE businesses SET name = ?, description = ?, logo = ?, address = ?, contacts = ?, social_handles = ?, tel = ? WHERE id = ?").run(name, description, logo, address, contacts, social_handles, tel, req.params.id);
+      db.prepare("UPDATE businesses SET name = ?, description = ?, type = ?, logo = ?, address = ?, contacts = ?, social_handles = ?, tel = ? WHERE id = ?").run(name, description, type, logo, address, contacts, social_handles, tel, req.params.id);
       res.json({ success: true });
     } catch (err) {
       res.status(400).json({ error: "Failed to update business" });
@@ -211,26 +252,37 @@ async function startServer() {
     res.json(business);
   });
 
-  app.put("/api/businesses/:id", (req, res) => {
-    const { name, description, logo, address, contacts, social_handles, tel } = req.body;
-    db.prepare(`
-      UPDATE businesses 
-      SET name = ?, description = ?, logo = ?, address = ?, contacts = ?, social_handles = ?, tel = ?
-      WHERE id = ?
-    `).run(name, description, logo, address, contacts, social_handles, tel, req.params.id);
-    res.json({ success: true });
-  });
-
   app.get("/api/businesses/:id/analytics", (req, res) => {
     const businessId = req.params.id;
-    const totalItems = db.prepare("SELECT COUNT(*) as count FROM items WHERE business_id = ?").get(businessId).count;
-    const totalLikes = db.prepare(`
-      SELECT COUNT(*) as count FROM likes 
-      JOIN items ON likes.item_id = items.id 
-      WHERE items.business_id = ?
-    `).get(businessId).count;
-    
-    res.json({ totalItems, totalLikes });
+    try {
+      const totalItems = db.prepare("SELECT COUNT(*) as count FROM items WHERE business_id = ?").get(businessId).count;
+      const totalLikes = db.prepare(`
+        SELECT COUNT(*) as count FROM likes 
+        JOIN items ON likes.item_id = items.id 
+        WHERE items.business_id = ?
+      `).get(businessId).count;
+      const totalFollowers = db.prepare("SELECT COUNT(*) as count FROM follows WHERE business_id = ?").get(businessId).count;
+      
+      const likesByDay = db.prepare(`
+        SELECT date(likes.created_at) as date, COUNT(*) as count 
+        FROM likes 
+        JOIN items ON likes.item_id = items.id 
+        WHERE items.business_id = ? 
+        GROUP BY date(likes.created_at) 
+        ORDER BY date ASC 
+        LIMIT 7
+      `).all(businessId);
+
+      res.json({ totalItems, totalLikes, totalFollowers, likesByDay });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
+  app.get("/api/admin/id", (req, res) => {
+    const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1").get();
+    res.json({ id: admin?.id });
   });
 
   // Items Routes
@@ -246,8 +298,16 @@ async function startServer() {
 
   app.post("/api/items", (req, res) => {
     const { title, description, image_url, gallery, custom_fields, business_id } = req.body;
-    const info = db.prepare("INSERT INTO items (title, description, image_url, gallery, custom_fields, business_id) VALUES (?, ?, ?, ?, ?, ?)").run(title, description, image_url, gallery || null, custom_fields || null, business_id || null);
-    const newItem = db.prepare("SELECT * FROM items WHERE id = ?").get(info.lastInsertRowid);
+    
+    // Check if business is approved
+    const business = db.prepare("SELECT is_approved FROM businesses WHERE id = ?").get(business_id);
+    if (!business || business.is_approved !== 1) {
+      return res.status(403).json({ error: "Business must be approved by admin to post items." });
+    }
+
+    const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    db.prepare("INSERT INTO items (id, title, description, image_url, gallery, custom_fields, business_id) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, title, description, image_url, gallery || null, custom_fields || null, business_id || null);
+    const newItem = db.prepare("SELECT * FROM items WHERE id = ?").get(id);
     
     io.emit("notification", { 
       type: 'new_item', 
@@ -270,7 +330,7 @@ async function startServer() {
     const info = db.prepare("INSERT INTO comments (item_id, user_id, user_name, text, parent_id) VALUES (?, ?, ?, ?, ?)").run(itemId, userId, userName, text, parentId || null);
     const newComment = db.prepare("SELECT * FROM comments WHERE id = ?").get(info.lastInsertRowid);
     
-    io.emit("engagement", { itemId, type: 'comment', comment: newComment });
+    io.emit("engagement", { itemId, type: 'comment', comment: newComment, userName });
     
     const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
     io.emit("notification", {
@@ -291,20 +351,25 @@ async function startServer() {
   app.post("/api/items/:id/like", (req, res) => {
     const { userId } = req.body;
     const itemId = req.params.id;
-    db.prepare("INSERT INTO likes (user_id, item_id) VALUES (?, ?)").run(userId, itemId);
-    db.prepare("INSERT INTO analytics (event_type) VALUES ('like')").run();
-    
-    const likeCount = db.prepare("SELECT COUNT(*) as count FROM likes WHERE item_id = ?").get(itemId);
-    io.emit("engagement", { itemId, type: 'like', count: likeCount.count });
-    
-    const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
-    io.emit("notification", {
-      type: 'like',
-      title: 'New Like!',
-      body: `Someone liked your item: ${item.title}`
-    });
-    
-    res.json({ success: true });
+    try {
+      db.prepare("INSERT INTO likes (user_id, item_id) VALUES (?, ?)").run(userId, itemId);
+      db.prepare("INSERT INTO analytics (event_type) VALUES ('like')").run();
+      
+      const user = db.prepare("SELECT name FROM users WHERE id = ?").get(userId);
+      const likeCount = db.prepare("SELECT COUNT(*) as count FROM likes WHERE item_id = ?").get(itemId);
+      io.emit("engagement", { itemId, type: 'like', count: likeCount.count, userName: user.name });
+      
+      const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
+      io.emit("notification", {
+        type: 'like',
+        title: 'New Like!',
+        body: `Someone liked your item: ${item.title}`
+      });
+      
+      res.json({ success: true });
+    } catch (err) {
+      res.json({ success: false, message: "Already liked" });
+    }
   });
 
   // Admin Routes
@@ -318,7 +383,13 @@ async function startServer() {
   });
 
   app.get("/api/admin/businesses", (req, res) => {
-    const businesses = db.prepare("SELECT * FROM businesses").all();
+    const businesses = db.prepare(`
+      SELECT businesses.*, 
+      (SELECT COUNT(*) FROM items WHERE business_id = businesses.id) as item_count,
+      (SELECT COUNT(*) FROM follows WHERE business_id = businesses.id) as follower_count,
+      (SELECT COUNT(*) FROM likes JOIN items ON likes.item_id = items.id WHERE items.business_id = businesses.id) as like_count
+      FROM businesses
+    `).all();
     res.json(businesses);
   });
 
@@ -347,10 +418,30 @@ async function startServer() {
   // Messaging Routes
   app.post("/api/messages", (req, res) => {
     const { sender_id, receiver_id, text, attachment } = req.body;
-    const info = db.prepare("INSERT INTO messages (sender_id, receiver_id, text, attachment) VALUES (?, ?, ?, ?)").run(sender_id, receiver_id, text, attachment);
-    const newMessage = db.prepare("SELECT * FROM messages WHERE id = ?").get(info.lastInsertRowid);
+    const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+    db.prepare("INSERT INTO messages (id, sender_id, receiver_id, text, attachment) VALUES (?, ?, ?, ?, ?)").run(id, sender_id, receiver_id, text, attachment);
+    const newMessage = db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
     io.emit("message", newMessage);
     res.json(newMessage);
+  });
+
+  app.get("/api/messages/business/:businessId", (req, res) => {
+    const business = db.prepare("SELECT owner_id FROM businesses WHERE id = ?").get(req.params.businessId);
+    if (!business) return res.status(404).json({ error: "Business not found" });
+    
+    const messages = db.prepare(`
+      SELECT messages.*, users.name as sender_name, users.profile_picture as sender_avatar
+      FROM messages 
+      JOIN users ON messages.sender_id = users.id
+      WHERE receiver_id = ? 
+      ORDER BY created_at DESC
+    `).all(business.owner_id);
+    res.json(messages);
+  });
+
+  app.put("/api/messages/:id/read", (req, res) => {
+    db.prepare("UPDATE messages SET is_read = 1 WHERE id = ?").run(req.params.id);
+    res.json({ success: true });
   });
 
   app.get("/api/messages/:userId/:otherId", (req, res) => {
@@ -369,6 +460,17 @@ async function startServer() {
     const { userId } = req.body;
     try {
       db.prepare("INSERT INTO follows (user_id, business_id) VALUES (?, ?)").run(userId, req.params.id);
+      
+      // Notify business owner via Vitu
+      const business = db.prepare("SELECT owner_id, name FROM businesses WHERE id = ?").get(req.params.id);
+      const vitu = db.prepare("SELECT id FROM users WHERE email = 'vitu@system.com'").get();
+      if (business && vitu) {
+        const msgId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+        const notificationText = `New follower! A user has started following ${business.name}.`;
+        db.prepare("INSERT INTO messages (id, sender_id, receiver_id, text) VALUES (?, ?, ?, ?)").run(msgId, vitu.id, business.owner_id, notificationText);
+        io.emit('notification', { receiver_id: business.owner_id, text: notificationText, type: 'follow' });
+      }
+
       res.json({ success: true });
     } catch (err) {
       res.status(400).json({ error: "Already following" });
@@ -387,19 +489,53 @@ async function startServer() {
 
   // Analytics Routes
   app.get("/api/admin/analytics", (req, res) => {
-    const likesByDay = db.prepare(`
-      SELECT DATE(timestamp) as date, COUNT(*) as count 
-      FROM analytics 
-      WHERE event_type = 'like' 
-      GROUP BY DATE(timestamp)
-      LIMIT 7
-    `).all();
-    
-    const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
-    const totalItems = db.prepare("SELECT COUNT(*) as count FROM items").get().count;
-    const totalLikes = db.prepare("SELECT COUNT(*) as count FROM likes").get().count;
+    try {
+      const likesByDay = db.prepare(`
+        SELECT DATE(timestamp) as date, COUNT(*) as count 
+        FROM analytics 
+        WHERE event_type = 'like' 
+        GROUP BY DATE(timestamp)
+        LIMIT 7
+      `).all();
+      
+      const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
+      const totalItems = db.prepare("SELECT COUNT(*) as count FROM items").get().count;
+      const totalLikes = db.prepare("SELECT COUNT(*) as count FROM likes").get().count;
 
-    res.json({ likesByDay, totalUsers, totalItems, totalLikes });
+      res.json({ likesByDay, totalUsers, totalItems, totalLikes });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch admin analytics" });
+    }
+  });
+
+  // Search Route
+  app.get("/api/search", (req, res) => {
+    const { q } = req.query;
+    if (!q) return res.json({ items: [], businesses: [] });
+    
+    const searchTerm = `%${q}%`;
+    
+    try {
+      const items = db.prepare(`
+        SELECT items.*, businesses.name as business_name 
+        FROM items 
+        LEFT JOIN businesses ON items.business_id = businesses.id 
+        WHERE items.title LIKE ? OR items.description LIKE ?
+        ORDER BY items.created_at DESC
+      `).all(searchTerm, searchTerm);
+      
+      const businesses = db.prepare(`
+        SELECT * FROM businesses 
+        WHERE name LIKE ? OR description LIKE ? OR type LIKE ?
+        ORDER BY created_at DESC
+      `).all(searchTerm, searchTerm, searchTerm);
+      
+      res.json({ items, businesses });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Search failed" });
+    }
   });
 
   // Vite middleware for development

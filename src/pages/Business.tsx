@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Business } from '../types';
+import { User, Business, Message } from '../types';
 
 export default function BusinessPage({ user, business, onUpdate }: { user: User; business: Business | null; onUpdate: () => void }) {
   const [name, setName] = useState(business?.name || '');
@@ -11,10 +12,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   const [contacts, setContacts] = useState(business?.contacts || '');
   const [socialHandles, setSocialHandles] = useState(business?.social_handles || '');
   const [tel, setTel] = useState(business?.tel || '');
+  const [type, setType] = useState(business?.type || '');
+  
+  const businessTypes = ['Retailer', 'Motor Spare', 'Blocker', 'Repairer', 'Transporter', 'Food Deliverer'];
   
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [analytics, setAnalytics] = useState<{ totalItems: number; totalLikes: number } | null>(null);
+  const [analytics, setAnalytics] = useState<{ totalItems: number; totalLikes: number; totalFollowers: number; likesByDay: any[] } | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [activeTab, setActiveTab] = useState<'overview' | 'items' | 'inbox'>('overview');
+  const [requestingApproval, setRequestingApproval] = useState(false);
   const [newItem, setNewItem] = useState({ 
     title: '', 
     description: '', 
@@ -36,13 +43,28 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       setContacts(business.contacts || '');
       setSocialHandles(business.social_handles || '');
       setTel(business.tel || '');
+      setType(business.type || '');
+      if (activeTab === 'inbox') fetchMessages();
     }
-  }, [business]);
+  }, [business, activeTab]);
+
+  const fetchMessages = async () => {
+    if (!business) return;
+    try {
+      const res = await fetch(`/api/messages/business/${business.id}`);
+      if (!res.ok) throw new Error('Failed to fetch messages');
+      const data = await res.json();
+      setMessages(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchAnalytics = async () => {
     if (!business) return;
     try {
       const res = await fetch(`/api/businesses/${business.id}/analytics`);
+      if (!res.ok) throw new Error('Failed to fetch analytics');
       const data = await res.json();
       setAnalytics(data);
     } catch (err) {
@@ -77,7 +99,8 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
           address,
           contacts,
           social_handles: socialHandles,
-          tel
+          tel,
+          type
         }),
       });
       if (res.ok) {
@@ -92,6 +115,36 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestApproval = async () => {
+    if (!business) return;
+    setRequestingApproval(true);
+    try {
+      // 1. Get Admin ID
+      const adminRes = await fetch('/api/admin/id');
+      const { id: adminId } = await adminRes.json();
+      
+      if (!adminId) throw new Error('Admin not found');
+
+      // 2. Send message to Admin
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: user.id,
+          receiver_id: adminId,
+          text: `Hello Admin, I would like to request approval for my business: ${business.name}. Please review my profile.`,
+        }),
+      });
+
+      alert('Approval request sent to the master admin!');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send request. Please try again later.');
+    } finally {
+      setRequestingApproval(false);
     }
   };
 
@@ -265,6 +318,20 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
               />
             </div>
             <div className="space-y-2">
+              <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Business Type</label>
+              <select
+                required
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all appearance-none"
+              >
+                <option value="">Select Type</option>
+                {businessTypes.map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
               <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Social Handles</label>
               <div className="relative">
                 <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
@@ -317,6 +384,23 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         </button>
       </header>
 
+      {/* Approval Status Banner */}
+      {!business.is_approved && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-50 border border-amber-200 p-6 rounded-3xl flex items-center gap-4"
+        >
+          <div className="p-3 bg-amber-100 text-amber-600 rounded-2xl">
+            <AlertCircle size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-amber-900">Pending Approval</h3>
+            <p className="text-sm text-amber-700">Your business profile is currently being reviewed by our team. You'll be able to post items once approved.</p>
+          </div>
+        </motion.div>
+      )}
+
       {/* Business Details Card */}
       <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm grid gap-4 sm:grid-cols-2 md:grid-cols-4">
         {business.address && (
@@ -345,8 +429,32 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         )}
       </div>
 
-      {/* Stats */}
-      <div className="grid gap-6 sm:grid-cols-2">
+      {/* Tabs */}
+      <div className="flex gap-2 p-1 bg-neutral-100 rounded-2xl w-fit">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'overview' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+        >
+          Overview
+        </button>
+        <button
+          onClick={() => setActiveTab('items')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'items' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+        >
+          My Items
+        </button>
+        <button
+          onClick={() => setActiveTab('inbox')}
+          className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${activeTab === 'inbox' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'}`}
+        >
+          Inbox
+        </button>
+      </div>
+
+      {activeTab === 'overview' && (
+        <>
+          {/* Stats */}
+          <div className="grid gap-6 sm:grid-cols-3">
         <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex items-center gap-4">
           <div className="p-4 rounded-2xl bg-emerald-50 text-emerald-600">
             <Package size={24} />
@@ -354,6 +462,15 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
           <div>
             <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Your Items</p>
             <p className="text-2xl font-black">{analytics?.totalItems || 0}</p>
+          </div>
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex items-center gap-4">
+          <div className="p-4 rounded-2xl bg-blue-50 text-blue-600">
+            <Users size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Followers</p>
+            <p className="text-2xl font-black">{analytics?.totalFollowers || 0}</p>
           </div>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-neutral-200 shadow-sm flex items-center gap-4">
@@ -367,13 +484,100 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         </div>
       </div>
 
-      {/* Post New Item */}
+      {/* Analytics Chart */}
       <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="text-xl font-bold">Performance Trends</h3>
+          <TrendingUp size={20} className="text-emerald-500" />
+        </div>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={analytics?.likesByDay || []}>
+              <defs>
+                <linearGradient id="colorLikesBusiness" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a3a3a3' }} />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#a3a3a3' }} />
+              <Tooltip 
+                contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+              />
+              <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorLikesBusiness)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+        </>
+      )}
+
+      {activeTab === 'inbox' && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-neutral-900">Business Inbox</h2>
+            <button onClick={fetchMessages} className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-colors">
+              <TrendingUp size={20} />
+            </button>
+          </div>
+          
+          <div className="bg-white rounded-[2.5rem] border border-neutral-200 overflow-hidden shadow-sm">
+            {messages.length === 0 ? (
+              <div className="p-20 text-center">
+                <div className="w-16 h-16 bg-neutral-100 text-neutral-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Inbox size={32} />
+                </div>
+                <h3 className="text-lg font-bold text-neutral-900">No messages yet</h3>
+                <p className="text-neutral-500">When users contact your business, their messages will appear here.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-neutral-100">
+                {messages.map(msg => (
+                  <div key={msg.id} className={`p-6 flex gap-4 hover:bg-neutral-50 transition-colors ${!msg.is_read ? 'bg-emerald-50/30' : ''}`}>
+                    <div className="w-12 h-12 rounded-2xl bg-neutral-100 overflow-hidden flex-shrink-0">
+                      {msg.sender_avatar ? (
+                        <img src={msg.sender_avatar} alt={msg.sender_name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-neutral-400"><Users size={20} /></div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-bold text-neutral-900">{msg.sender_name}</h4>
+                        <span className="text-[10px] text-neutral-400 font-medium uppercase tracking-widest">
+                          {new Date(msg.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm text-neutral-600 leading-relaxed">{msg.text}</p>
+                      {msg.attachment && (
+                        <div className="mt-3 p-2 bg-white border border-neutral-200 rounded-xl inline-block">
+                          <img src={msg.attachment} alt="Attachment" className="max-h-32 rounded-lg" />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'items' && (
+        <div className="space-y-10">
+          {/* Post New Item */}
+          <div className={`bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm ${!business.is_approved ? 'opacity-70 grayscale' : ''}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
             <Plus size={20} />
           </div>
           <h3 className="text-xl font-bold">Post Business Item</h3>
+          {!business.is_approved && (
+            <span className="ml-auto text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 px-3 py-1 rounded-full border border-amber-200 flex items-center gap-1">
+              <AlertCircle size={12} /> Locked until approved
+            </span>
+          )}
         </div>
         <form onSubmit={handlePostItem} className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
@@ -381,17 +585,18 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
             <input
               type="text"
               required
+              disabled={!business.is_approved}
               value={newItem.title}
               onChange={(e) => setNewItem({ ...newItem, title: e.target.value })}
-              className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+              className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
             />
           </div>
           
           <div className="space-y-2">
             <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Main Image</label>
             <div 
-              onClick={() => itemImageInputRef.current?.click()}
-              className="w-full h-32 bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-neutral-100 transition-all overflow-hidden"
+              onClick={() => business.is_approved && itemImageInputRef.current?.click()}
+              className={`w-full h-32 bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center gap-2 transition-all overflow-hidden ${business.is_approved ? 'cursor-pointer hover:bg-neutral-100' : 'cursor-not-allowed'}`}
             >
               {newItem.image_url ? (
                 <img src={newItem.image_url} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
@@ -415,10 +620,11 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
             <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Description</label>
             <textarea
               required
+              disabled={!business.is_approved}
               value={newItem.description}
               onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
               rows={3}
-              className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
+              className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none disabled:cursor-not-allowed"
             />
           </div>
 
@@ -438,10 +644,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                   </button>
                 </div>
               ))}
-              <label className="w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-lg cursor-pointer hover:border-emerald-500 transition-colors">
+              <label className={`w-20 h-20 flex flex-col items-center justify-center border-2 border-dashed border-neutral-300 rounded-lg transition-colors ${business.is_approved ? 'cursor-pointer hover:border-emerald-500' : 'cursor-not-allowed'}`}>
                 <Plus size={20} className="text-neutral-400" />
                 <span className="text-[10px] text-neutral-400 font-bold uppercase">Add</span>
-                <input type="file" multiple className="hidden" onChange={handleGalleryUpload} accept="image/*" />
+                <input type="file" multiple className="hidden" onChange={handleGalleryUpload} accept="image/*" disabled={!business.is_approved} />
               </label>
             </div>
           </div>
@@ -453,7 +659,8 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
               <button 
                 type="button"
                 onClick={addCustomField}
-                className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
+                disabled={!business.is_approved}
+                className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:no-underline"
               >
                 + Add Field
               </button>
@@ -464,21 +671,24 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                   <input
                     type="text"
                     placeholder="Field Name"
+                    disabled={!business.is_approved}
                     value={field.key}
                     onChange={(e) => updateCustomField(i, e.target.value, field.value)}
-                    className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed"
                   />
                   <input
                     type="text"
                     placeholder="Value"
+                    disabled={!business.is_approved}
                     value={field.value}
                     onChange={(e) => updateCustomField(i, field.key, e.target.value)}
-                    className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500 disabled:cursor-not-allowed"
                   />
                   <button 
                     type="button"
                     onClick={() => removeCustomField(i)}
-                    className="p-2 text-neutral-400 hover:text-red-500"
+                    disabled={!business.is_approved}
+                    className="p-2 text-neutral-400 hover:text-red-500 disabled:opacity-50"
                   >
                     <Trash2 size={18} />
                   </button>
@@ -487,15 +697,30 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="md:col-span-2 py-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-50"
-          >
-            {loading ? 'Posting...' : 'Post Item'}
-          </button>
+          <div className="md:col-span-2 flex gap-4">
+            <button
+              type="submit"
+              disabled={loading || !business.is_approved}
+              className="flex-1 py-4 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {loading ? 'Posting...' : 'Post Item'}
+            </button>
+            {!business.is_approved && (
+              <button
+                type="button"
+                onClick={handleRequestApproval}
+                disabled={requestingApproval}
+                className="px-6 py-4 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 active:scale-[0.98] transition-all flex items-center gap-2 whitespace-nowrap"
+              >
+                <ShieldCheck size={20} />
+                {requestingApproval ? 'Sending...' : 'Request Approval'}
+              </button>
+            )}
+          </div>
         </form>
       </div>
+      </div>
+      )}
     </div>
   );
 }

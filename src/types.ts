@@ -10,7 +10,7 @@ export interface User {
 }
 
 export interface Item {
-  id: number;
+  id: string;
   title: string;
   description: string;
   image_url: string;
@@ -28,6 +28,7 @@ export interface Business {
   owner_id: number;
   name: string;
   description: string;
+  type: string;
   logo?: string;
   address?: string;
   contacts?: string;
@@ -48,11 +49,14 @@ export interface Comment {
 }
 
 export interface Message {
-  id: number;
+  id: string;
   sender_id: number;
   receiver_id: number;
+  sender_name?: string;
+  sender_avatar?: string;
   text: string;
   attachment?: string;
+  is_read?: boolean;
   created_at: string;
 }
 

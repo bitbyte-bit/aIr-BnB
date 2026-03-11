@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -23,6 +23,55 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [business, setBusiness] = useState<Business | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
+    const isDismissed = sessionStorage.getItem('pwa_banner_dismissed');
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      if (!isStandalone && !isDismissed) {
+        setShowInstallBanner(true);
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    // For iOS or browsers where beforeinstallprompt doesn't fire but we want to show instructions
+    if (!isStandalone && !isDismissed && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      // We can't programmatically trigger install on iOS, but we could show a different banner
+      // For now, let's just show the banner if we can't detect beforeinstallprompt but know it's not standalone
+      // Actually, without beforeinstallprompt we can't use the .prompt() method.
+      // So on iOS we'd usually show "Add to Home Screen" instructions.
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleDismissBanner = () => {
+    setShowInstallBanner(false);
+    sessionStorage.setItem('pwa_banner_dismissed', 'true');
+  };
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) {
+      // If no deferredPrompt (e.g. iOS), we could show instructions
+      alert('To install: tap the share button and "Add to Home Screen"');
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+    }
+    setDeferredPrompt(null);
+    setShowInstallBanner(false);
+  };
 
   useEffect(() => {
     if (user) {
@@ -72,6 +121,79 @@ export default function App() {
   return (
     <Router>
       <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
+        <AnimatePresence>
+          {showInstallBanner && (
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="fixed bottom-20 md:bottom-6 left-4 right-4 z-50 md:left-auto md:right-6 md:w-96"
+            >
+              <div className="bg-white border border-neutral-200 p-6 rounded-[2.5rem] shadow-2xl">
+                <div className="flex items-start gap-4 mb-6">
+                  <div className="p-4 bg-emerald-100 text-emerald-600 rounded-2xl">
+                    <Download size={28} />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-neutral-900">Install Vitu</h3>
+                    <p className="text-sm text-neutral-500 leading-relaxed mt-1">
+                      Experience Vitu like a native app on your device.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={handleDismissBanner}
+                    className="p-2 text-neutral-400 hover:bg-neutral-100 rounded-full transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <div className="bg-emerald-50 p-3 rounded-2xl flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <Check size={12} />
+                    </div>
+                    <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-widest">Offline</span>
+                  </div>
+                  <div className="bg-blue-50 p-3 rounded-2xl flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                      <Check size={12} />
+                    </div>
+                    <span className="text-[10px] font-bold text-blue-800 uppercase tracking-widest">Faster</span>
+                  </div>
+                </div>
+
+                {/iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator as any).standalone ? (
+                  <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-100 space-y-3">
+                    <p className="text-xs font-medium text-neutral-600">To install on iOS:</p>
+                    <ol className="text-xs text-neutral-500 space-y-2 list-decimal list-inside">
+                      <li>Tap the <Share size={14} className="inline mx-1 text-blue-500" /> button in Safari</li>
+                      <li>Select <span className="font-bold text-neutral-900">"Add to Home Screen"</span></li>
+                      <li>Tap <span className="font-bold text-neutral-900">"Add"</span> to finish</li>
+                    </ol>
+                  </div>
+                ) : (
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleDismissBanner}
+                      className="flex-1 py-4 text-sm font-bold text-neutral-500 hover:bg-neutral-100 rounded-2xl transition-colors"
+                    >
+                      Maybe Later
+                    </button>
+                    <button
+                      onClick={handleInstallClick}
+                      className="flex-[2] py-4 bg-neutral-900 text-white font-bold rounded-2xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg shadow-neutral-200"
+                    >
+                      <Download size={20} />
+                      Install Now
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <AnimatePresence mode="wait">
           <Routes>
             {!user ? (

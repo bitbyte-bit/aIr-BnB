@@ -27,6 +27,7 @@ export default function Admin() {
   const fetchAnalytics = async () => {
     try {
       const res = await fetch('/api/admin/analytics');
+      if (!res.ok) throw new Error('Failed to fetch analytics');
       const data = await res.json();
       setAnalytics(data);
     } catch (err) {
@@ -39,6 +40,7 @@ export default function Admin() {
   const fetchUsers = async () => {
     try {
       const res = await fetch('/api/admin/users');
+      if (!res.ok) throw new Error('Failed to fetch users');
       const data = await res.json();
       setUsers(data);
     } catch (err) {
@@ -49,6 +51,7 @@ export default function Admin() {
   const fetchBusinesses = async () => {
     try {
       const res = await fetch('/api/admin/businesses');
+      if (!res.ok) throw new Error('Failed to fetch businesses');
       const data = await res.json();
       setBusinesses(data);
     } catch (err) {
@@ -441,28 +444,40 @@ export default function Admin() {
               <thead>
                 <tr className="border-bottom border-neutral-100 bg-neutral-50">
                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Business</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Details</th>
+                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Performance</th>
                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Approval</th>
                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
-                {businesses.map((b) => (
+                {businesses.map((b: any) => (
                   <tr key={b.id} className="hover:bg-neutral-50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-neutral-100 overflow-hidden">
+                        <div className="w-10 h-10 rounded-xl bg-neutral-100 overflow-hidden shrink-0">
                           {b.logo && <img src={b.logo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
                         </div>
                         <div>
                           <div className="font-bold text-neutral-900">{b.name}</div>
-                          <div className="text-xs text-neutral-500">{b.contacts}</div>
+                          <div className="text-[10px] text-neutral-400 uppercase tracking-widest">{b.contacts}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-xs text-neutral-600 max-w-xs truncate">{b.description}</div>
-                      <div className="text-[10px] text-neutral-400">{b.address}</div>
+                      <div className="flex gap-4">
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Items</p>
+                          <p className="text-sm font-black text-neutral-900">{b.item_count || 0}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Followers</p>
+                          <p className="text-sm font-black text-emerald-600">{b.follower_count || 0}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Likes</p>
+                          <p className="text-sm font-black text-red-600">{b.like_count || 0}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       {b.is_approved ? (
