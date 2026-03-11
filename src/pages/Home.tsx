@@ -614,9 +614,9 @@ export default function Home({ user }: { user: User }) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              className="bg-white w-full max-w-lg rounded-[2.5rem] md:overflow-hidden shadow-2xl flex flex-col md:max-h-[90vh] fixed md:relative inset-0 md:inset-auto z-50"
             >
-              <div className="relative h-32 bg-emerald-600">
+              <div className="relative h-32 bg-emerald-600 shrink-0">
                 <button 
                   onClick={() => { setSelectedBusiness(null); setIsMessaging(false); }}
                   className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
@@ -630,7 +630,7 @@ export default function Home({ user }: { user: User }) {
                 </div>
               </div>
 
-              <div className="pt-14 px-8 pb-8 overflow-y-auto">
+              <div className="pt-14 px-8 pb-8 overflow-y-auto flex-1">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -665,9 +665,9 @@ export default function Home({ user }: { user: User }) {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20 }}
-                      className="space-y-4"
+                      className="space-y-4 flex flex-col min-h-[300px]"
                     >
-                      <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
+                      <div className="h-64 md:h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3 flex-1">
                         {messages.map((m) => (
                           <div 
                             key={m.id} 
