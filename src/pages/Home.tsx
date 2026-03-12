@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
 import { Item, User, Comment, Business, Message } from '../types';
 
 export default function Home({ user }: { user: User }) {
+  const { itemId } = useParams();
+  const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeComments, setActiveComments] = useState<string | null>(null);
@@ -62,7 +65,7 @@ export default function Home({ user }: { user: User }) {
     socket.on('notification', (data) => {
       if (data.receiver_id === user.id) {
         const activityId = Date.now();
-        setLiveActivities(prev => [...prev, { id: activityId, text: data.text, type: 'notification' }]);
+        setLiveActivities(prev => [...prev, { id: activityId, text: data.text, type: data.type || 'notification' }]);
         setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
       }
     });
@@ -74,14 +77,62 @@ export default function Home({ user }: { user: User }) {
     };
   }, [selectedBusiness, items, user.id]);
 
-  const fetchItems = async () => {
+  useEffect(() => {
+    if (itemId && items.length > 0) {
+      const item = items.find(i => i.id === itemId);
+      if (item) setSelectedItem(item);
+    }
+  }, [itemId, items]);
+
+  useEffect(() => {
+    if (selectedItem) {
+      if (itemId !== selectedItem.id) {
+        navigate(`/item/${selectedItem.id}`, { replace: true });
+      }
+    } else if (itemId) {
+      navigate('/', { replace: true });
+    }
+  }, [selectedItem, itemId, navigate]);
+
+  const handleShare = async (item: Item) => {
+    const shareUrl = `${window.location.origin}/item/${item.id}`;
+    const shareData = {
+      title: item.title,
+      text: item.description,
+      url: shareUrl,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error('Error sharing:', err);
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Link copied to clipboard!');
+      } catch (err) {
+        console.error('Error copying link:', err);
+      }
+    }
+  };
+
+  const fetchItems = async (retries = 3) => {
     try {
       const res = await fetch('/api/items');
       if (!res.ok) throw new Error('Failed to fetch items');
       const data = await res.json();
       setItems(data);
     } catch (err) {
-      console.error(err);
+      if (retries > 0) {
+        console.warn(`Retrying fetchItems... (${retries} left)`);
+        setTimeout(() => fetchItems(retries - 1), 1000);
+      } else {
+        console.error(err);
+      }
     } finally {
       setLoading(false);
     }
@@ -199,7 +250,16 @@ export default function Home({ user }: { user: User }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       });
-      if (res.ok) setIsFollowing(!isFollowing);
+      if (res.ok) {
+        setIsFollowing(!isFollowing);
+        setSelectedBusiness(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            followers_count: (prev.followers_count || 0) + (isFollowing ? -1 : 1)
+          };
+        });
+      }
     } catch (err) {
       console.error(err);
     }
@@ -209,10 +269,12 @@ export default function Home({ user }: { user: User }) {
     if (!selectedBusiness) return;
     try {
       const res = await fetch(`/api/messages/${user.id}/${selectedBusiness.owner_id}`);
-      const data = await res.json();
-      setMessages(data);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch messages:", err);
     }
   };
 
@@ -273,7 +335,12 @@ export default function Home({ user }: { user: User }) {
       <div key={comment.id} className={depth > 0 ? "ml-6 mt-2" : "mt-3"}>
         <div className="bg-neutral-50 p-3 rounded-2xl border border-neutral-100">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-bold text-neutral-900">{comment.user_name}</span>
+            <span 
+              className="text-xs font-bold text-neutral-900 cursor-pointer hover:text-emerald-600 transition-colors"
+              onClick={() => window.location.href = `/profile/${comment.user_id}`}
+            >
+              {comment.user_name}
+            </span>
             <span className="text-[10px] text-neutral-400">
               {new Date(comment.created_at).toLocaleString()}
             </span>
@@ -374,7 +441,7 @@ export default function Home({ user }: { user: User }) {
       </section>
 
       {/* Live Activity Toasts */}
-      <div className="fixed bottom-24 left-4 z-50 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed bottom-20 left-4 md:left-72 z-50 flex flex-col gap-2 pointer-events-none">
         <AnimatePresence>
           {liveActivities.map((activity) => (
             <motion.div
@@ -382,12 +449,16 @@ export default function Home({ user }: { user: User }) {
               initial={{ opacity: 0, x: -20, scale: 0.9 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -20, scale: 0.9 }}
-              className="bg-white/90 backdrop-blur-md border border-neutral-200 px-4 py-3 rounded-2xl shadow-lg flex items-center gap-3 min-w-[200px]"
+              className="bg-white border border-neutral-100 px-5 py-4 rounded-[2rem] shadow-xl flex items-center gap-4 min-w-[300px] pointer-events-auto"
             >
-              <div className={`p-2 rounded-full ${activity.type === 'like' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-                {activity.type === 'like' ? <Heart size={14} fill="currentColor" /> : <MessageCircle size={14} />}
+              <div className={`p-2.5 rounded-full flex-shrink-0 ${
+                activity.type === 'like' ? 'bg-red-50 text-red-500' : 
+                'bg-blue-50 text-blue-500'
+              }`}>
+                {activity.type === 'like' ? <Heart size={18} fill="currentColor" /> : 
+                 <MessageSquare size={18} />}
               </div>
-              <p className="text-xs font-bold text-neutral-800">{activity.text}</p>
+              <p className="text-sm font-bold text-neutral-800 leading-tight">{activity.text}</p>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -451,12 +522,19 @@ export default function Home({ user }: { user: User }) {
                         referrerPolicy="no-referrer"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <button 
-                        onClick={() => handleLike(item.id)}
-                        className="absolute top-4 right-4 p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 hover:bg-emerald-600 hover:text-white transition-all shadow-lg"
-                      >
-                        <Heart size={20} className={item.likes ? 'fill-current' : ''} />
-                      </button>
+                      <div className="absolute top-4 right-4 flex flex-col gap-2">
+                        <button 
+                          onClick={() => handleLike(item.id)}
+                          className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 hover:bg-emerald-600 hover:text-white transition-all shadow-lg flex items-center gap-2"
+                        >
+                          <Heart size={20} className={item.likes ? 'fill-current' : ''} />
+                          <span className="text-sm font-bold">{item.likes || 0}</span>
+                        </button>
+                        <div className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 shadow-lg flex items-center gap-2">
+                          <Users size={20} className="text-emerald-600" />
+                          <span className="text-sm font-bold">{item.followers_count || 0}</span>
+                        </div>
+                      </div>
                     </div>
                     <div className="p-6">
                       <div className="flex items-center gap-2 mb-3">
@@ -517,13 +595,19 @@ export default function Home({ user }: { user: User }) {
                     </button>
                   )}
                 </div>
-                <button
-                  onClick={() => handleLike(item.id)}
-                  className="flex items-center gap-1.5 text-neutral-400 hover:text-red-500 transition-colors"
-                >
-                  <Heart size={20} className={item.likes ? "fill-red-500 text-red-500" : ""} />
-                  <span className="text-sm font-medium">{item.likes || 0}</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-neutral-400">
+                    <Users size={18} className="text-emerald-500" />
+                    <span className="text-sm font-medium">{item.followers_count || 0}</span>
+                  </div>
+                  <button
+                    onClick={() => handleLike(item.id)}
+                    className="flex items-center gap-1.5 text-neutral-400 hover:text-red-500 transition-colors"
+                  >
+                    <Heart size={20} className={item.likes ? "fill-red-500 text-red-500" : ""} />
+                    <span className="text-sm font-medium">{item.likes || 0}</span>
+                  </button>
+                </div>
               </div>
               <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
               
@@ -541,6 +625,13 @@ export default function Home({ user }: { user: User }) {
                 >
                   <Globe size={18} />
                   <span className="text-xs font-semibold uppercase tracking-wider">Explore</span>
+                </button>
+                <button 
+                  onClick={() => handleShare(item)}
+                  className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
+                >
+                  <Share2 size={18} />
+                  <span className="text-xs font-semibold uppercase tracking-wider">Share</span>
                 </button>
               </div>
 
@@ -614,9 +705,9 @@ export default function Home({ user }: { user: User }) {
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] md:overflow-hidden shadow-2xl flex flex-col md:max-h-[90vh] fixed md:relative inset-0 md:inset-auto z-50"
+              className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
             >
-              <div className="relative h-32 bg-emerald-600 shrink-0">
+              <div className="relative h-32 bg-emerald-600">
                 <button 
                   onClick={() => { setSelectedBusiness(null); setIsMessaging(false); }}
                   className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
@@ -630,7 +721,7 @@ export default function Home({ user }: { user: User }) {
                 </div>
               </div>
 
-              <div className="pt-14 px-8 pb-8 overflow-y-auto flex-1">
+              <div className="pt-14 px-8 pb-8 overflow-y-auto">
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-2xl font-bold flex items-center gap-2">
@@ -665,9 +756,9 @@ export default function Home({ user }: { user: User }) {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20 }}
-                      className="space-y-4 flex flex-col min-h-[300px]"
+                      className="space-y-4"
                     >
-                      <div className="h-64 md:h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3 flex-1">
+                      <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
                         {messages.map((m) => (
                           <div 
                             key={m.id} 
@@ -720,9 +811,24 @@ export default function Home({ user }: { user: User }) {
                       exit={{ opacity: 0, x: 20 }}
                       className="space-y-6"
                     >
-                      <p className="text-neutral-600 leading-relaxed">{selectedBusiness.description}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-neutral-600 leading-relaxed">{selectedBusiness.description}</p>
+                        <button 
+                          onClick={() => window.location.href = `/profile/${selectedBusiness.owner_id}`}
+                          className="text-xs font-bold text-emerald-600 hover:underline flex items-center gap-1"
+                        >
+                          <Users size={14} /> View Owner
+                        </button>
+                      </div>
                       
                       <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="flex items-center gap-3 p-4 bg-neutral-50 rounded-2xl">
+                          <Users size={18} className="text-emerald-500" />
+                          <div>
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Followers</p>
+                            <p className="text-sm font-bold text-neutral-900">{selectedBusiness.followers_count || 0}</p>
+                          </div>
+                        </div>
                         <div className="flex items-center gap-3 p-4 bg-neutral-50 rounded-2xl">
                           <MapPin size={18} className="text-emerald-500" />
                           <div>
@@ -746,9 +852,29 @@ export default function Home({ user }: { user: User }) {
                         </div>
                         <div className="flex items-center gap-3 p-4 bg-neutral-50 rounded-2xl">
                           <Globe size={18} className="text-emerald-500" />
-                          <div>
+                          <div className="flex-1">
                             <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Socials</p>
-                            <p className="text-sm font-bold text-neutral-900">{selectedBusiness.social_handles || 'Not specified'}</p>
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {(() => {
+                                try {
+                                  const handles = selectedBusiness.social_handles ? JSON.parse(selectedBusiness.social_handles) : [];
+                                  if (Array.isArray(handles) && handles.length > 0) {
+                                    return handles.map((h: any, i: number) => (
+                                      <a 
+                                        key={i} 
+                                        href={h.url.startsWith('http') ? h.url : `https://${h.url}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
+                                      >
+                                        {h.platform}
+                                      </a>
+                                    ));
+                                  }
+                                } catch (e) {}
+                                return <p className="text-sm font-bold text-neutral-900">Not specified</p>;
+                              })()}
+                            </div>
                           </div>
                         </div>
                       </div>

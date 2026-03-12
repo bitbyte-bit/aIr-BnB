@@ -7,7 +7,11 @@ import path from "path";
 import fs from "fs";
 import * as crypto from "node:crypto";
 
+console.log("Starting server initialization...");
+
 const db = new Database("vitu.db");
+db.pragma('journal_mode = WAL');
+console.log("Database connected in WAL mode.");
 
 // Schema migration: Ensure items and messages use TEXT IDs
 try {
@@ -134,6 +138,17 @@ try { db.exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0"); } ca
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(user_id, item_id)"); } catch (e) {}
 try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 
+// Seed System User
+const systemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
+if (!systemUser) {
+  db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
+    "vitu@system.com",
+    "system",
+    "Vitu System",
+    "user"
+  );
+}
+
 // Seed Master Admin
 const masterAdmin = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@gmail.com");
 if (!masterAdmin) {
@@ -167,8 +182,24 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
+  // Request logger
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      console.log(`${req.method} ${req.url} ${res.statusCode} ${duration}ms`);
+    });
+    next();
+  });
+
+  // Global error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  });
+
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok" });
+    res.json({ status: "ok", env: process.env.NODE_ENV });
   });
 
   // Auth Routes
@@ -243,13 +274,26 @@ async function startServer() {
   });
 
   app.get("/api/businesses/my/:ownerId", (req, res) => {
-    const business = db.prepare("SELECT * FROM businesses WHERE owner_id = ?").get(req.params.ownerId);
+    const business = db.prepare(`
+      SELECT *, (SELECT COUNT(*) FROM follows WHERE business_id = businesses.id) as followers_count
+      FROM businesses WHERE owner_id = ?
+    `).get(req.params.ownerId);
     res.json(business || null);
   });
 
   app.get("/api/businesses/:id", (req, res) => {
-    const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(req.params.id);
+    const business = db.prepare(`
+      SELECT *, (SELECT COUNT(*) FROM follows WHERE business_id = businesses.id) as followers_count
+      FROM businesses WHERE id = ?
+    `).get(req.params.id);
     res.json(business);
+  });
+
+  app.get("/api/business-types", (req, res) => {
+    const types = db.prepare("SELECT DISTINCT type FROM businesses WHERE type IS NOT NULL AND type != ''").all() as { type: string }[];
+    const defaultTypes = ['Retailer', 'Motor Spare', 'Blocker', 'Repairer', 'Transporter', 'Food Deliverer'];
+    const allTypes = Array.from(new Set([...defaultTypes, ...types.map(t => t.type)]));
+    res.json(allTypes);
   });
 
   app.get("/api/businesses/:id/analytics", (req, res) => {
@@ -288,7 +332,9 @@ async function startServer() {
   // Items Routes
   app.get("/api/items", (req, res) => {
     const items = db.prepare(`
-      SELECT items.*, businesses.name as business_name, businesses.is_approved 
+      SELECT items.*, businesses.name as business_name, businesses.is_approved,
+      (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+      (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count
       FROM items 
       LEFT JOIN businesses ON items.business_id = businesses.id 
       ORDER BY created_at DESC
@@ -316,6 +362,26 @@ async function startServer() {
     });
     
     res.json(newItem);
+  });
+
+  app.get("/api/businesses/:id/items", (req, res) => {
+    try {
+      const items = db.prepare("SELECT * FROM items WHERE business_id = ? ORDER BY created_at DESC").all(req.params.id);
+      res.json(items);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch business items" });
+    }
+  });
+
+  app.delete("/api/items/:id", (req, res) => {
+    try {
+      db.prepare("DELETE FROM likes WHERE item_id = ?").run(req.params.id);
+      db.prepare("DELETE FROM comments WHERE item_id = ?").run(req.params.id);
+      db.prepare("DELETE FROM items WHERE id = ?").run(req.params.id);
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete item" });
+    }
   });
 
   // Engagement Routes
@@ -518,7 +584,9 @@ async function startServer() {
     
     try {
       const items = db.prepare(`
-        SELECT items.*, businesses.name as business_name 
+        SELECT items.*, businesses.name as business_name,
+        (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+        (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count
         FROM items 
         LEFT JOIN businesses ON items.business_id = businesses.id 
         WHERE items.title LIKE ? OR items.description LIKE ?
@@ -526,7 +594,9 @@ async function startServer() {
       `).all(searchTerm, searchTerm);
       
       const businesses = db.prepare(`
-        SELECT * FROM businesses 
+        SELECT *,
+        (SELECT COUNT(*) FROM follows WHERE business_id = businesses.id) as followers_count
+        FROM businesses 
         WHERE name LIKE ? OR description LIKE ? OR type LIKE ?
         ORDER BY created_at DESC
       `).all(searchTerm, searchTerm, searchTerm);
@@ -536,6 +606,42 @@ async function startServer() {
       console.error(err);
       res.status(500).json({ error: "Search failed" });
     }
+  });
+
+  // Open Graph Meta Tag Injection for Shared Items
+  app.get("/item/:id", (req, res, next) => {
+    if (process.env.NODE_ENV !== "production") {
+      return next();
+    }
+
+    const itemId = req.params.id;
+    try {
+      const item = db.prepare("SELECT * FROM items WHERE id = ?").get(itemId) as any;
+      const indexPath = path.join(__dirname, "dist", "index.html");
+      
+      if (fs.existsSync(indexPath)) {
+        let html = fs.readFileSync(indexPath, 'utf8');
+        
+        if (item) {
+          const ogTags = `
+            <title>${item.title} | Vitu</title>
+            <meta property="og:title" content="${item.title}" />
+            <meta property="og:description" content="${item.description}" />
+            <meta property="og:image" content="${item.image_url}" />
+            <meta property="og:url" content="${process.env.APP_URL}/item/${item.id}" />
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta name="twitter:title" content="${item.title}" />
+            <meta name="twitter:description" content="${item.description}" />
+            <meta name="twitter:image" content="${item.image_url}" />
+          `;
+          html = html.replace('<title>Vitu</title>', ogTags);
+        }
+        return res.send(html);
+      }
+    } catch (err) {
+      console.error("OG injection error:", err);
+    }
+    next();
   });
 
   // Vite middleware for development
@@ -554,7 +660,7 @@ async function startServer() {
 
   const PORT = 3000;
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 
   io.on("connection", (socket) => {
@@ -562,4 +668,6 @@ async function startServer() {
   });
 }
 
-startServer();
+startServer().catch(err => {
+  console.error("Failed to start server:", err);
+});

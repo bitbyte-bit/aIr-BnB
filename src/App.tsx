@@ -19,8 +19,14 @@ function cn(...inputs: ClassValue[]) {
 
 export default function App() {
   const [user, setUser] = useState<UserType | null>(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('user');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      console.error("Failed to parse user from localStorage:", e);
+      localStorage.removeItem('user');
+      return null;
+    }
   });
   const [business, setBusiness] = useState<Business | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -80,14 +86,21 @@ export default function App() {
     }
   }, [user]);
 
-  const fetchBusiness = async () => {
+  const fetchBusiness = async (retries = 3) => {
     if (!user) return;
     try {
       const res = await fetch(`/api/businesses/my/${user.id}`);
-      const data = await res.json();
-      setBusiness(data);
+      if (res.ok) {
+        const data = await res.json();
+        setBusiness(data);
+      }
     } catch (err) {
-      console.error(err);
+      if (retries > 0) {
+        console.warn(`Retrying fetchBusiness... (${retries} left)`);
+        setTimeout(() => fetchBusiness(retries - 1), 1000);
+      } else {
+        console.error("Failed to fetch business:", err);
+      }
     }
   };
 
@@ -205,7 +218,9 @@ export default function App() {
                   <Layout user={user} business={business} onLogout={handleLogout}>
                     <Routes>
                       <Route path="/" element={<HomePage user={user} />} />
+                      <Route path="/item/:itemId" element={<HomePage user={user} />} />
                       <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+                      <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
                       <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
                       {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
                       <Route path="*" element={<Navigate to="/" replace />} />

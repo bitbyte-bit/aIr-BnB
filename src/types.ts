@@ -18,6 +18,7 @@ export interface Item {
   custom_fields?: string; // JSON string of key-value pairs
   created_at: string;
   likes?: number;
+  followers_count?: number;
   business_id?: number;
   business_name?: string;
   is_approved?: boolean;
@@ -35,7 +36,13 @@ export interface Business {
   social_handles?: string;
   tel?: string;
   is_approved: boolean;
+  followers_count?: number;
   created_at: string;
+}
+
+export interface SocialHandle {
+  platform: string;
+  url: string;
 }
 
 export interface Comment {
