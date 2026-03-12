@@ -5,7 +5,11 @@ import { createServer as createViteServer } from "vite";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
-import * as crypto from "node:crypto";
+import crypto from "node:crypto";
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 console.log("Starting server initialization...");
 
@@ -13,16 +17,16 @@ const db = new Database("vitu.db");
 db.pragma('journal_mode = WAL');
 console.log("Database connected in WAL mode.");
 
-// Schema migration: Ensure items and messages use TEXT IDs
+// Schema migration
 try {
-  const itemsInfo = db.prepare("PRAGMA table_info(items)").all() as any[];
+  const itemsInfo = db.prepare("PRAGMA table_info(items)").all();
   if (itemsInfo.length > 0 && itemsInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
     db.exec("DROP TABLE IF EXISTS items");
     db.exec("DROP TABLE IF EXISTS likes"); 
     db.exec("DROP TABLE IF EXISTS comments");
   }
 
-  const messagesInfo = db.prepare("PRAGMA table_info(messages)").all() as any[];
+  const messagesInfo = db.prepare("PRAGMA table_info(messages)").all();
   if (messagesInfo.length > 0 && messagesInfo.find(c => c.name === 'id')?.type === 'INTEGER') {
     db.exec("DROP TABLE IF EXISTS messages");
   }
@@ -121,9 +125,9 @@ db.exec(`
     FOREIGN KEY(business_id) REFERENCES businesses(id),
     UNIQUE(user_id, business_id)
   );
-` );
+`);
 
-// Helper to add columns if they don't exist
+// Add columns if they don't exist
 try { db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN gallery TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN custom_fields TEXT"); } catch (e) {}
@@ -138,35 +142,21 @@ try { db.exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0"); } ca
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(user_id, item_id)"); } catch (e) {}
 try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 
-// Seed System User
-const systemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
-if (!systemUser) {
+// Seed System User and Master Admin
+const existingSystemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
+if (!existingSystemUser) {
   db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
     "vitu@system.com",
     "system",
     "Vitu System",
     "user"
   );
-}
-
-// Seed Master Admin
-const masterAdmin = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@gmail.com");
-if (!masterAdmin) {
+  
+  // Seed Master Admin
   db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
     "vitu@gmail.com",
     "vitu",
     "Master Admin",
-    "admin"
-  );
-}
-
-// Seed Vitu System User
-const vituUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
-if (!vituUser) {
-  db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
-    "vitu@system.com",
-    "vitu_system_secure_pass",
-    "Vitu",
     "admin"
   );
 }
@@ -193,7 +183,7 @@ async function startServer() {
   });
 
   // Global error handler
-  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  app.use((err, req, res, next) => {
     console.error("Unhandled error:", err);
     res.status(500).json({ error: "Internal server error" });
   });
@@ -290,7 +280,7 @@ async function startServer() {
   });
 
   app.get("/api/business-types", (req, res) => {
-    const types = db.prepare("SELECT DISTINCT type FROM businesses WHERE type IS NOT NULL AND type != ''").all() as { type: string }[];
+    const types = db.prepare("SELECT DISTINCT type FROM businesses WHERE type IS NOT NULL AND type != ''").all();
     const defaultTypes = ['Retailer', 'Motor Spare', 'Blocker', 'Repairer', 'Transporter', 'Food Deliverer'];
     const allTypes = Array.from(new Set([...defaultTypes, ...types.map(t => t.type)]));
     res.json(allTypes);
@@ -345,7 +335,6 @@ async function startServer() {
   app.post("/api/items", (req, res) => {
     const { title, description, image_url, gallery, custom_fields, business_id } = req.body;
     
-    // Check if business is approved
     const business = db.prepare("SELECT is_approved FROM businesses WHERE id = ?").get(business_id);
     if (!business || business.is_approved !== 1) {
       return res.status(403).json({ error: "Business must be approved by admin to post items." });
@@ -423,7 +412,7 @@ async function startServer() {
       
       const user = db.prepare("SELECT name FROM users WHERE id = ?").get(userId);
       const likeCount = db.prepare("SELECT COUNT(*) as count FROM likes WHERE item_id = ?").get(itemId);
-      io.emit("engagement", { itemId, type: 'like', count: likeCount.count, userName: user.name });
+      io.emit("engagement", { itemId, type: 'like', count: likeCount.count, userName: user?.name || 'Someone' });
       
       const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
       io.emit("notification", {
@@ -527,7 +516,6 @@ async function startServer() {
     try {
       db.prepare("INSERT INTO follows (user_id, business_id) VALUES (?, ?)").run(userId, req.params.id);
       
-      // Notify business owner via Vitu
       const business = db.prepare("SELECT owner_id, name FROM businesses WHERE id = ?").get(req.params.id);
       const vitu = db.prepare("SELECT id FROM users WHERE email = 'vitu@system.com'").get();
       if (business && vitu) {
@@ -608,44 +596,11 @@ async function startServer() {
     }
   });
 
-  // Open Graph Meta Tag Injection for Shared Items
-  app.get("/item/:id", (req, res, next) => {
-    if (process.env.NODE_ENV !== "production") {
-      return next();
-    }
-
-    const itemId = req.params.id;
-    try {
-      const item = db.prepare("SELECT * FROM items WHERE id = ?").get(itemId) as any;
-      const indexPath = path.join(__dirname, "dist", "index.html");
-      
-      if (fs.existsSync(indexPath)) {
-        let html = fs.readFileSync(indexPath, 'utf8');
-        
-        if (item) {
-          const ogTags = `
-            <title>${item.title} | Vitu</title>
-            <meta property="og:title" content="${item.title}" />
-            <meta property="og:description" content="${item.description}" />
-            <meta property="og:image" content="${item.image_url}" />
-            <meta property="og:url" content="${process.env.APP_URL}/item/${item.id}" />
-            <meta name="twitter:card" content="summary_large_image" />
-            <meta name="twitter:title" content="${item.title}" />
-            <meta name="twitter:description" content="${item.description}" />
-            <meta name="twitter:image" content="${item.image_url}" />
-          `;
-          html = html.replace('<title>Vitu</title>', ogTags);
-        }
-        return res.send(html);
-      }
-    } catch (err) {
-      console.error("OG injection error:", err);
-    }
-    next();
-  });
+  // Check if running in production mode
+  const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(__dirname, 'dist'));
 
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
+  if (!isProduction) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -659,8 +614,8 @@ async function startServer() {
   }
 
   const PORT = 3000;
-  httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+  httpServer.listen(PORT, "127.0.0.1", () => {
+    console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 
   io.on("connection", (socket) => {

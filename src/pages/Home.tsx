@@ -30,6 +30,9 @@ export default function Home({ user }: { user: User }) {
   const [searchResults, setSearchResults] = useState<{ items: Item[]; businesses: Business[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+
   useEffect(() => {
     fetchItems();
 
@@ -47,7 +50,7 @@ export default function Home({ user }: { user: User }) {
 
       // Live Activity Toast
       const activityId = Date.now();
-      const item = items.find(i => i.id === itemId);
+      const item = itemsRef.current.find(i => i.id === itemId);
       const activityText = type === 'like' 
         ? `${userName || 'Someone'} liked ${item?.title || 'an item'}`
         : `${userName || 'Someone'} commented on ${item?.title || 'an item'}`;
@@ -75,7 +78,7 @@ export default function Home({ user }: { user: User }) {
       socket.off('message');
       socket.off('notification');
     };
-  }, [selectedBusiness, items, user.id]);
+  }, [selectedBusiness, user.id]);
 
   useEffect(() => {
     if (itemId && items.length > 0) {
