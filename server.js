@@ -14,8 +14,7 @@ const __dirname = path.dirname(__filename);
 console.log("Starting server initialization...");
 
 const db = new Database("vitu.db");
-db.pragma('journal_mode = WAL');
-console.log("Database connected in WAL mode.");
+console.log("Database connected.");
 
 // Schema migration
 try {
@@ -602,7 +601,7 @@ async function startServer() {
   // Vite middleware for development
   if (!isProduction) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, host: '0.0.0.0' },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -614,7 +613,7 @@ async function startServer() {
   }
 
   const PORT = 3000;
-  httpServer.listen(PORT, "127.0.0.1", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 
