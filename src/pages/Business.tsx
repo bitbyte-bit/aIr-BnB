@@ -1029,7 +1029,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                 {businessItems.map(item => (
                   <div key={item.id} className="bg-white rounded-3xl border border-neutral-200 overflow-hidden shadow-sm group">
                     <div className="aspect-square overflow-hidden relative">
-                      <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img src={item.image_url} alt={item.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
                       <div className="absolute top-4 right-4 flex gap-2">
                         <button 
                           onClick={() => handleToggleItemStatus(item.id, item.is_active !== false)}

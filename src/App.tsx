@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -12,6 +12,9 @@ import AdminPage from './pages/Admin';
 import BusinessPage from './pages/Business';
 import { User as UserType, Business } from './types';
 import socket from './socket';
+
+// VAPID public key - should match server.js
+const VAPID_PUBLIC_KEY = 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -31,6 +34,27 @@ export default function App() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Load unread count from localStorage on mount
+  useEffect(() => {
+    const savedCount = localStorage.getItem('unread_notifications');
+    if (savedCount) {
+      setUnreadCount(parseInt(savedCount, 10));
+    }
+  }, []);
+
+  // Update badge when unread count changes
+  useEffect(() => {
+    if ('setAppBadge' in navigator) {
+      if (unreadCount > 0) {
+        navigator.setAppBadge(unreadCount).catch(console.error);
+      } else {
+        navigator.clearAppBadge().catch(console.error);
+      }
+    }
+    localStorage.setItem('unread_notifications', unreadCount.toString());
+  }, [unreadCount]);
 
   useEffect(() => {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
@@ -113,6 +137,8 @@ export default function App() {
       if (Notification.permission === "granted") {
         new Notification(data.title, { body: data.body });
       }
+      // Increment unread count and update badge
+      setUnreadCount(prev => prev + 1);
     });
 
     return () => {
@@ -120,9 +146,63 @@ export default function App() {
     };
   };
 
+  // Register Service Worker and subscribe to push notifications
+  const registerPushNotifications = async (userId: number) => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      console.log('Push notifications not supported');
+      return;
+    }
+
+    try {
+      // Register service worker
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('Service Worker registered:', registration);
+
+      // Check current permission
+      let permission = Notification.permission;
+      
+      if (permission === 'default') {
+        permission = await Notification.requestPermission();
+      }
+
+      if (permission === 'granted') {
+        // Subscribe to push notifications
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        });
+
+        // Save subscription to server
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, subscription })
+        });
+
+        console.log('Push subscription successful');
+      }
+    } catch (err) {
+      console.error('Failed to register push notifications:', err);
+    }
+  };
+
+  // Utility function to convert VAPID key
+  function urlBase64ToUint8Array(base64String: string) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
   const handleLogin = (userData: UserType) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // Register for push notifications after login
+    registerPushNotifications(userData.id);
   };
 
   const handleLogout = () => {
@@ -255,14 +335,24 @@ function Layout({ children, user, business, onLogout }: { children: React.ReactN
           <Menu size={24} />
         </button>
         <span className="text-xl font-bold tracking-tight text-emerald-600">Vitu</span>
-        <div className="w-10 h-10 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300">
-          {user.profile_picture ? (
-            <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold">
-              {user.name[0]}
-            </div>
+        <div className="flex items-center gap-2">
+          {unreadCount > 0 && (
+            <Link to="/" onClick={() => setUnreadCount(0)} className="relative p-2 text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
+              <Bell size={24} />
+              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            </Link>
           )}
+          <Link to="/profile" className="w-10 h-10 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300">
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold">
+                {user.name[0]}
+              </div>
+            )}
+          </Link>
         </div>
       </header>
 

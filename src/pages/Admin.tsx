@@ -1,8 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save } from 'lucide-react';
+import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save, Eye, Mail, Phone, Calendar, BarChart2, MessageCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
+
+interface UserDetails {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  status: string;
+  bio: string;
+  profile_picture: string;
+  created_at: string;
+  business_id: number;
+  business_name: string;
+  business_description: string;
+  business_phone: string;
+  performance: {
+    itemsCount: number;
+    likesCount: number;
+    commentsCount: number;
+    businessesCount: number;
+  };
+  businesses: Business[];
+  recentItems: any[];
+}
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions'>('analytics');
@@ -12,6 +35,8 @@ export default function Admin() {
   const [billingPlans, setBillingPlans] = useState<any[]>([]);
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [pendingSubscriptions, setPendingSubscriptions] = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
+  const [userDetailsLoading, setUserDetailsLoading] = useState(false);
   const [newItem, setNewItem] = useState({ 
     title: '', 
     description: '', 
@@ -94,6 +119,21 @@ export default function Admin() {
       setUsers(data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchUserDetails = async (userId: number) => {
+    setUserDetailsLoading(true);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/details`);
+      if (!res.ok) throw new Error('Failed to fetch user details');
+      const data = await res.json();
+      setSelectedUser(data);
+    } catch (err) {
+      console.error('Error fetching user details:', err);
+      alert('Failed to fetch user details');
+    } finally {
+      setUserDetailsLoading(false);
     }
   };
 
@@ -434,50 +474,60 @@ export default function Admin() {
             exit={{ opacity: 0, y: -20 }}
             className="bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm overflow-hidden"
           >
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-bottom border-neutral-100 bg-neutral-50">
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">User</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Type</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="font-bold text-neutral-900">{u.name}</div>
-                      <div className="text-xs text-neutral-500">{u.email}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                        u.business_id ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
-                      }`}>
-                        {u.business_id ? `Business (${u.name})` : 'User'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                        u.status === 'active' ? 'bg-emerald-100 text-emerald-600' :
-                        u.status === 'warned' ? 'bg-yellow-100 text-yellow-600' :
-                        'bg-red-100 text-red-600'
-                      }`}>
-                        {u.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => handleUpdateUserStatus(u.id, 'warned')} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="Warn"><AlertTriangle size={16} /></button>
-                        <button onClick={() => handleUpdateUserStatus(u.id, 'suspended')} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg" title="Suspend"><Shield size={16} /></button>
-                        <button onClick={() => handleUpdateUserStatus(u.id, 'banned')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Ban"><XCircle size={16} /></button>
-                        <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
-                      </div>
-                    </td>
+            {/* Responsive table with horizontal scroll on mobile */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[600px] md:min-w-0">
+                <thead>
+                  <tr className="border-bottom border-neutral-100 bg-neutral-50">
+                    <th className="px-4 md:px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">User</th>
+                    <th className="px-4 md:px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Type</th>
+                    <th className="px-4 md:px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Status</th>
+                    <th className="px-4 md:px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {users.map((u) => (
+                    <tr key={u.id} className="hover:bg-neutral-50 transition-colors">
+                      <td className="px-4 md:px-6 py-4">
+                        <div className="font-bold text-neutral-900">{u.name}</div>
+                        <div className="text-xs text-neutral-500">{u.email}</div>
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                          u.business_id ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'
+                        }`}>
+                          {u.business_id ? `Business` : 'User'}
+                        </span>
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                          u.status === 'active' ? 'bg-emerald-100 text-emerald-600' :
+                          u.status === 'warned' ? 'bg-yellow-100 text-yellow-600' :
+                          'bg-red-100 text-red-600'
+                        }`}>
+                          {u.status}
+                        </span>
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        <div className="flex items-center gap-1 md:gap-2">
+                          <button 
+                            onClick={() => fetchUserDetails(u.id)} 
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg" 
+                            title="View Details"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button onClick={() => handleUpdateUserStatus(u.id, 'warned')} className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg" title="Warn"><AlertTriangle size={16} /></button>
+                          <button onClick={() => handleUpdateUserStatus(u.id, 'suspended')} className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg hidden sm:inline-flex" title="Suspend"><Shield size={16} /></button>
+                          <button onClick={() => handleUpdateUserStatus(u.id, 'banned')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg hidden sm:inline-flex" title="Ban"><XCircle size={16} /></button>
+                          <button onClick={() => handleDeleteUser(u.id)} className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </motion.div>
         )}
 
@@ -804,6 +854,149 @@ export default function Admin() {
                 ))}
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* User Details Modal */}
+      <AnimatePresence>
+        {selectedUser && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSelectedUser(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="sticky top-0 bg-white p-6 border-b border-neutral-100 rounded-t-[2.5rem]">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-neutral-900">User Details</h2>
+                  <button 
+                    onClick={() => setSelectedUser(null)}
+                    className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
+                  >
+                    <X size={24} className="text-neutral-500" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="p-6 space-y-6">
+                {userDetailsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Basic Info */}
+                    <div className="flex items-start gap-4">
+                      <div className="w-20 h-20 rounded-2xl bg-neutral-100 overflow-hidden shrink-0">
+                        {selectedUser.profile_picture ? (
+                          <img src={selectedUser.profile_picture} alt={selectedUser.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-3xl font-bold text-neutral-400">
+                            {selectedUser.name[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-neutral-900">{selectedUser.name}</h3>
+                        <p className="text-neutral-500 flex items-center gap-2 mt-1">
+                          <Mail size={14} /> {selectedUser.email}
+                        </p>
+                        {selectedUser.business_phone && (
+                          <p className="text-neutral-500 flex items-center gap-2 mt-1">
+                            <Phone size={14} /> {selectedUser.business_phone}
+                          </p>
+                        )}
+                        <p className="text-neutral-400 flex items-center gap-2 mt-1 text-sm">
+                          <Calendar size={14} /> Joined {new Date(selectedUser.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Bio */}
+                    {selectedUser.bio && (
+                      <div className="p-4 bg-neutral-50 rounded-2xl">
+                        <p className="text-neutral-600">{selectedUser.bio}</p>
+                      </div>
+                    )}
+
+                    {/* Performance Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-4 bg-emerald-50 rounded-2xl text-center">
+                        <Package className="mx-auto text-emerald-600 mb-2" size={24} />
+                        <p className="text-2xl font-black text-neutral-900">{selectedUser.performance.itemsCount}</p>
+                        <p className="text-xs font-bold text-neutral-500 uppercase">Items</p>
+                      </div>
+                      <div className="p-4 bg-red-50 rounded-2xl text-center">
+                        <Heart className="mx-auto text-red-600 mb-2" size={24} />
+                        <p className="text-2xl font-black text-neutral-900">{selectedUser.performance.likesCount}</p>
+                        <p className="text-xs font-bold text-neutral-500 uppercase">Likes</p>
+                      </div>
+                      <div className="p-4 bg-blue-50 rounded-2xl text-center">
+                        <MessageCircle className="mx-auto text-blue-600 mb-2" size={24} />
+                        <p className="text-2xl font-black text-neutral-900">{selectedUser.performance.commentsCount}</p>
+                        <p className="text-xs font-bold text-neutral-500 uppercase">Comments</p>
+                      </div>
+                      <div className="p-4 bg-purple-50 rounded-2xl text-center">
+                        <Briefcase className="mx-auto text-purple-600 mb-2" size={24} />
+                        <p className="text-2xl font-black text-neutral-900">{selectedUser.performance.businessesCount}</p>
+                        <p className="text-xs font-bold text-neutral-500 uppercase">Businesses</p>
+                      </div>
+                    </div>
+
+                    {/* Business Info */}
+                    {selectedUser.business_name && (
+                      <div className="p-6 bg-neutral-50 rounded-2xl">
+                        <h4 className="font-bold text-neutral-900 mb-2 flex items-center gap-2">
+                          <Briefcase size={18} /> Business Information
+                        </h4>
+                        <p className="font-bold text-lg text-neutral-800">{selectedUser.business_name}</p>
+                        {selectedUser.business_description && (
+                          <p className="text-neutral-600 mt-2">{selectedUser.business_description}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Recent Items */}
+                    {selectedUser.recentItems && selectedUser.recentItems.length > 0 && (
+                      <div>
+                        <h4 className="font-bold text-neutral-900 mb-4 flex items-center gap-2">
+                          <BarChart2 size={18} /> Recent Items
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedUser.recentItems.map((item: any) => (
+                            <div key={item.id} className="flex items-center gap-4 p-3 bg-neutral-50 rounded-xl">
+                              <div className="w-12 h-12 rounded-lg bg-neutral-200 overflow-hidden shrink-0">
+                                {item.image_url && (
+                                  <img src={item.image_url} alt={item.title} className="w-full h-full object-cover" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-bold text-neutral-900 truncate">{item.title}</p>
+                                <div className="flex gap-3 text-xs text-neutral-500">
+                                  <span className="flex items-center gap-1"><Heart size={12} /> {item.likes}</span>
+                                  <span className="flex items-center gap-1"><MessageCircle size={12} /> {item.comments}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

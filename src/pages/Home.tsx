@@ -671,7 +671,7 @@ export default function Home({ user }: { user: User }) {
               <img
                 src={item.image_url || `https://picsum.photos/seed/${item.id}/800/600`}
                 alt={item.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer"
+                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 cursor-pointer"
                 referrerPolicy="no-referrer"
                 onClick={() => { setReviewItem(item); setIsReviewModalOpen(true); }}
               />

@@ -19,5 +19,13 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "categories": ["business", "shopping"],
+  "shortcuts": [
+    {
+      "name": "Home",
+      "url": "/",
+      "description": "View home feed"
+    }
   ]
 }

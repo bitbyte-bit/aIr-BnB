@@ -7,6 +7,26 @@ import path from "path";
 import fs from "fs";
 import crypto from "node:crypto";
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
+import webpush from 'web-push';
+
+// Load environment variables
+dotenv.config();
+
+// VAPID Keys for Web Push - using env vars or fallbacks for development
+const vapidKeys = {
+  publicKey: process.env.VAPID_PUBLIC_KEY || 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco',
+  privateKey: process.env.VAPID_PRIVATE_KEY || 'FryIYnW_-3FMCWIbLhEYOSKMF7Btj_m4vXdnmF-u0Bw'
+};
+
+// Configure web-push
+webpush.setVapidDetails(
+  process.env.VAPID_SUBJECT || 'mailto:admin@vitu.app',
+  vapidKeys.publicKey,
+  vapidKeys.privateKey
+);
+
+console.log('Web Push VAPID public key:', vapidKeys.publicKey.substring(0, 20) + '...');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -326,6 +346,22 @@ try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(us
 try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
 try { db.exec("ALTER TABLE comments ADD COLUMN attachment TEXT"); } catch (e) {}
 
+// Create push_subscriptions table for Web Push notifications
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      endpoint TEXT NOT NULL,
+      keys TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    )
+  `);
+} catch (e) {
+  console.error("Error creating push_subscriptions table:", e);
+}
+
 // Seed System User and Master Admin
 const existingSystemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
 if (!existingSystemUser) {
@@ -374,6 +410,53 @@ async function startServer() {
 
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", env: process.env.NODE_ENV });
+  });
+
+  // Push Notification Routes
+  // Get VAPID public key for client to subscribe
+  app.get("/api/push/vapid-key", (req, res) => {
+    res.json({ publicKey: vapidKeys.publicKey });
+  });
+
+  // Subscribe to push notifications
+  app.post("/api/push/subscribe", (req, res) => {
+    const { userId, subscription } = req.body;
+    
+    if (!userId || !subscription || !subscription.endpoint || !subscription.keys) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      // Delete any existing subscription for this user (one subscription per user)
+      db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(userId);
+      
+      // Store new subscription
+      db.prepare(
+        "INSERT INTO push_subscriptions (user_id, endpoint, keys) VALUES (?, ?, ?)"
+      ).run(userId, subscription.endpoint, JSON.stringify(subscription.keys));
+      
+      res.json({ success: true, message: "Push subscription saved" });
+    } catch (err) {
+      console.error("Error saving push subscription:", err);
+      res.status(500).json({ error: "Failed to save subscription" });
+    }
+  });
+
+  // Unsubscribe from push notifications
+  app.post("/api/push/unsubscribe", (req, res) => {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: "Missing userId" });
+    }
+
+    try {
+      db.prepare("DELETE FROM push_subscriptions WHERE user_id = ?").run(userId);
+      res.json({ success: true, message: "Push subscription removed" });
+    } catch (err) {
+      console.error("Error removing push subscription:", err);
+      res.status(500).json({ error: "Failed to remove subscription" });
+    }
   });
 
   // Auth Routes
@@ -617,6 +700,39 @@ async function startServer() {
       title: 'New Item Posted!', 
       body: `${title} is now available.` 
     });
+    
+    // Send push notifications to all subscribed users (even when app is closed)
+    const pushNotificationPayload = JSON.stringify({
+      title: 'New Item Posted!',
+      body: `${title} is now available.`,
+      icon: '/icon-192.png',
+      badge: '/badge-72.png',
+      tag: 'new-item-' + id,
+      data: { itemId: id, type: 'new_item' }
+    });
+    
+    // Get all push subscriptions
+    const subscriptions = db.prepare("SELECT * FROM push_subscriptions").all();
+    
+    // Send push notification to each subscriber
+    for (const sub of subscriptions) {
+      const pushSubscription = {
+        endpoint: sub.endpoint,
+        keys: JSON.parse(sub.keys)
+      };
+      
+      webpush.sendNotification(pushSubscription, pushNotificationPayload)
+        .then(() => console.log(`Push notification sent to user ${sub.user_id}`))
+        .catch((err) => {
+          if (err.statusCode === 410) {
+            // Subscription expired, remove it
+            db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(sub.id);
+            console.log(`Removed expired push subscription for user ${sub.user_id}`);
+          } else {
+            console.error("Error sending push notification:", err);
+          }
+        });
+    }
     
     res.json(newItem);
   });
@@ -1008,11 +1124,81 @@ async function startServer() {
   // Admin Routes
   app.get("/api/admin/users", (req, res) => {
     const users = db.prepare(`
-      SELECT users.id, users.email, users.name, users.role, users.status, businesses.id as business_id, businesses.name as business_name
+      SELECT users.id, users.email, users.name, users.role, users.status, users.bio, users.profile_picture, businesses.id as business_id, businesses.name as business_name
       FROM users
       LEFT JOIN businesses ON users.id = businesses.owner_id
     `).all();
     res.json(users);
+  });
+
+  // Get detailed user information for admin
+  app.get("/api/admin/users/:id/details", (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      
+      // Get user basic info
+      const user = db.prepare(`
+        SELECT users.id, users.email, users.name, users.role, users.status, users.bio, users.profile_picture, users.created_at,
+        businesses.id as business_id, businesses.name as business_name, businesses.description as business_description, businesses.phone as business_phone
+        FROM users
+        LEFT JOIN businesses ON users.id = businesses.owner_id
+        WHERE users.id = ?
+      `).get(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // Get user's items count
+      const itemsCount = db.prepare(`
+        SELECT COUNT(*) as count FROM items WHERE business_id = ?
+      `).get(user.business_id || 0);
+      
+      // Get user's total likes across all items
+      const likesCount = db.prepare(`
+        SELECT COUNT(*) as count FROM likes 
+        JOIN items ON likes.item_id = items.id 
+        WHERE items.business_id = ?
+      `).get(user.business_id || 0);
+      
+      // Get user's total comments
+      const commentsCount = db.prepare(`
+        SELECT COUNT(*) as count FROM comments 
+        JOIN items ON comments.item_id = items.id 
+        WHERE items.business_id = ?
+      `).get(user.business_id || 0);
+      
+      // Get user's businesses
+      const businesses = db.prepare(`
+        SELECT * FROM businesses WHERE owner_id = ?
+      `).all(userId);
+      
+      // Get recent items
+      const recentItems = db.prepare(`
+        SELECT items.*, 
+        (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+        (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments
+        FROM items 
+        WHERE business_id = ?
+        ORDER BY items.created_at DESC 
+        LIMIT 10
+      `).all(user.business_id || 0);
+      
+      res.json({
+        ...user,
+        performance: {
+          itemsCount: itemsCount?.count || 0,
+          likesCount: likesCount?.count || 0,
+          commentsCount: commentsCount?.count || 0,
+          businessesCount: businesses.length
+        },
+        businesses,
+        recentItems
+      });
+    } catch (err) {
+      console.error("Error fetching user details:", err);
+      res.status(500).json({ error: "Failed to fetch user details" });
+    }
   });
 
   app.get("/api/admin/businesses", (req, res) => {
