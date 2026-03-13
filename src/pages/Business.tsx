@@ -88,13 +88,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const res = await fetch(`/api/businesses/${business.id}/items`);
       if (res.ok) {
         const data = await res.json();
-        setBusinessItems(data);
+        setBusinessItems(Array.isArray(data) ? data : []);
+      } else {
+        setBusinessItems([]);
       }
     } catch (err) {
       if (retries > 0) {
         setTimeout(() => fetchBusinessItems(retries - 1), 1000);
       } else {
         console.error("Failed to fetch business items:", err);
+        setBusinessItems([]);
       }
     }
   };
@@ -314,7 +317,12 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       });
       if (res.ok) {
         const updatedItem = await res.json();
-        setBusinessItems(prev => prev.map(item => item.id === itemId ? updatedItem : item));
+        if (updatedItem && updatedItem.id) {
+          setBusinessItems(prev => {
+            if (!Array.isArray(prev)) return [];
+            return prev.map(item => item.id === itemId ? updatedItem : item);
+          });
+        }
       }
     } catch (err) {
       console.error(err);

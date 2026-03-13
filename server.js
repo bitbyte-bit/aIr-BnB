@@ -33,6 +33,92 @@ try {
   console.error("Migration error:", e);
 }
 
+// Create billing_plans table if it doesn't exist
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS billing_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description TEXT,
+      monthly_price INTEGER NOT NULL DEFAULT 0,
+      yearly_price INTEGER NOT NULL DEFAULT 0,
+      lifetime_price INTEGER NOT NULL DEFAULT 0,
+      features TEXT,
+      monthly_payment_link TEXT,
+      yearly_payment_link TEXT,
+      lifetime_payment_link TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+} catch (e) {
+  console.error("Error creating billing_plans table:", e);
+}
+
+// Add payment link columns to billing_plans if they don't exist
+try {
+  db.exec(`ALTER TABLE billing_plans ADD COLUMN monthly_payment_link TEXT`);
+} catch (e) {}
+try {
+  db.exec(`ALTER TABLE billing_plans ADD COLUMN yearly_payment_link TEXT`);
+} catch (e) {}
+try {
+  db.exec(`ALTER TABLE billing_plans ADD COLUMN lifetime_payment_link TEXT`);
+} catch (e) {}
+
+// Create business_subscriptions table if it doesn't exist
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS business_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      business_id INTEGER NOT NULL,
+      plan_id INTEGER,
+      status TEXT DEFAULT 'pending',
+      start_date DATETIME,
+      end_date DATETIME,
+      payment_link TEXT,
+      reference_code TEXT,
+      payment_proof_image TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(business_id) REFERENCES businesses(id),
+      FOREIGN KEY(plan_id) REFERENCES billing_plans(id)
+    )
+  `);
+} catch (e) {
+  console.error("Error creating business_subscriptions table:", e);
+}
+
+// Add payment_proof_image column to business_subscriptions if it doesn't exist
+try {
+  db.exec(`ALTER TABLE business_subscriptions ADD COLUMN payment_proof_image TEXT`);
+} catch (e) {}
+
+// Add is_active column to items table if it doesn't exist
+try {
+  db.exec(`ALTER TABLE items ADD COLUMN is_active INTEGER DEFAULT 1`);
+} catch (e) {
+  // Column may already exist, ignore error
+}
+
+// Create reviews table if it doesn't exist
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id TEXT,
+      user_id INTEGER,
+      user_name TEXT,
+      rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+      text TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(item_id) REFERENCES items(id),
+      FOREIGN KEY(user_id) REFERENCES users(id),
+      UNIQUE(user_id, item_id)
+    )
+  `);
+} catch (e) {
+  console.error("Error creating reviews table:", e);
+}
+
 // Seed billing plans if they don't exist
 try {
   const plansExist = db.prepare("SELECT COUNT(*) as count FROM billing_plans").get();
@@ -212,6 +298,16 @@ db.exec(`
     FOREIGN KEY(business_id) REFERENCES businesses(id),
     UNIQUE(user_id, business_id)
   );
+
+  CREATE TABLE IF NOT EXISTS shares (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    item_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(item_id) REFERENCES items(id),
+    UNIQUE(user_id, item_id)
+  );
 `);
 
 // Add columns if they don't exist
@@ -228,6 +324,7 @@ try { db.exec("ALTER TABLE businesses ADD COLUMN type TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(user_id, item_id)"); } catch (e) {}
 try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
+try { db.exec("ALTER TABLE comments ADD COLUMN attachment TEXT"); } catch (e) {}
 
 // Seed System User and Master Admin
 const existingSystemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
@@ -466,6 +563,8 @@ async function startServer() {
     const items = db.prepare(`
       SELECT items.*, businesses.name as business_name, businesses.is_approved,
       (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+      (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments_count,
+      (SELECT COUNT(*) FROM shares WHERE item_id = items.id) as shares_count,
       (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
       (SELECT bs.status FROM business_subscriptions bs WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_status,
       (SELECT bp.name FROM business_subscriptions bs JOIN billing_plans bp ON bs.plan_id = bp.id WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_plan
@@ -483,6 +582,7 @@ async function startServer() {
         SELECT items.*, businesses.name as business_name, businesses.is_approved,
         (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
         (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments_count,
+        (SELECT COUNT(*) FROM shares WHERE item_id = items.id) as shares_count,
         (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
         (SELECT AVG(rating) FROM reviews WHERE item_id = items.id) as average_rating,
         (SELECT COUNT(*) FROM reviews WHERE item_id = items.id) as reviews_count
@@ -577,9 +677,9 @@ async function startServer() {
   });
 
   app.post("/api/items/:id/comments", (req, res) => {
-    const { userId, userName, text, parentId } = req.body;
+    const { userId, userName, text, parentId, attachment } = req.body;
     const itemId = req.params.id;
-    const info = db.prepare("INSERT INTO comments (item_id, user_id, user_name, text, parent_id) VALUES (?, ?, ?, ?, ?)").run(itemId, userId, userName, text, parentId || null);
+    const info = db.prepare("INSERT INTO comments (item_id, user_id, user_name, text, parent_id, attachment) VALUES (?, ?, ?, ?, ?, ?)").run(itemId, userId, userName, text, parentId || null, attachment || null);
     const newComment = db.prepare("SELECT * FROM comments WHERE id = ?").get(info.lastInsertRowid);
     
     io.emit("engagement", { itemId, type: 'comment', comment: newComment, userName });
@@ -624,6 +724,22 @@ async function startServer() {
     }
   });
 
+  // Share endpoint
+  app.post("/api/items/:id/share", (req, res) => {
+    const { userId } = req.body;
+    const itemId = req.params.id;
+    try {
+      db.prepare("INSERT INTO shares (user_id, item_id) VALUES (?, ?)").run(userId, itemId);
+      
+      const shareCount = db.prepare("SELECT COUNT(*) as count FROM shares WHERE item_id = ?").get(itemId);
+      io.emit("engagement", { itemId, type: 'share', count: shareCount.count });
+      
+      res.json({ success: true, shares_count: shareCount.count });
+    } catch (err) {
+      res.json({ success: false, message: "Already shared" });
+    }
+  });
+
   // Reviews Routes
   app.get("/api/items/:id/reviews", (req, res) => {
     try {
@@ -632,8 +748,8 @@ async function startServer() {
         FROM reviews 
         LEFT JOIN users ON reviews.user_id = users.id 
         WHERE item_id = ? 
-        ORDER BY created_at DESC
-      `).all(req.params.id);
+        ORDER BY user_id = ? DESC, created_at DESC
+      `).all(req.params.id, req.query.userId || null);
       
       // Get average rating
       const avgRating = db.prepare(
@@ -758,6 +874,57 @@ async function startServer() {
     }
   });
 
+  // Upload payment proof image
+  app.patch("/api/subscriptions/:id/payment-proof", (req, res) => {
+    const { payment_proof_image } = req.body;
+    try {
+      db.prepare("UPDATE business_subscriptions SET payment_proof_image = ? WHERE id = ?").run(payment_proof_image, req.params.id);
+      const subscription = db.prepare("SELECT * FROM business_subscriptions WHERE id = ?").get(req.params.id);
+      res.json(subscription);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Approve or reject subscription (admin)
+  app.patch("/api/admin/subscriptions/:id/approve", (req, res) => {
+    const { status } = req.body; // 'approved' or 'rejected'
+    try {
+      if (status === 'approved') {
+        db.prepare("UPDATE business_subscriptions SET status = 'approved' WHERE id = ?").run(req.params.id);
+      } else if (status === 'rejected') {
+        db.prepare("UPDATE business_subscriptions SET status = 'rejected' WHERE id = ?").run(req.params.id);
+      }
+      const subscription = db.prepare(`
+        SELECT bs.*, bp.name as plan_name, b.name as business_name
+        FROM business_subscriptions bs
+        LEFT JOIN billing_plans bp ON bs.plan_id = bp.id
+        LEFT JOIN businesses b ON bs.business_id = b.id
+        WHERE bs.id = ?
+      `).get(req.params.id);
+      res.json(subscription);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Get pending subscriptions (admin)
+  app.get("/api/admin/subscriptions/pending", (req, res) => {
+    try {
+      const subscriptions = db.prepare(`
+        SELECT bs.*, bp.name as plan_name, b.name as business_name, b.owner_id
+        FROM business_subscriptions bs
+        LEFT JOIN billing_plans bp ON bs.plan_id = bp.id
+        LEFT JOIN businesses b ON bs.business_id = b.id
+        WHERE bs.status = 'pending'
+        ORDER BY bs.created_at DESC
+      `).all();
+      res.json(subscriptions);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.get("/api/businesses/:id/billing-status", (req, res) => {
     try {
       const businessId = req.params.id;
@@ -810,13 +977,13 @@ async function startServer() {
   });
 
   app.put("/api/admin/billing-plans/:id", (req, res) => {
-    const { name, description, monthly_price, yearly_price, lifetime_price, features, payment_link } = req.body;
+    const { name, description, monthly_price, yearly_price, lifetime_price, features, monthly_payment_link, yearly_payment_link, lifetime_payment_link } = req.body;
     try {
       db.prepare(`
         UPDATE billing_plans 
-        SET name = ?, description = ?, monthly_price = ?, yearly_price = ?, lifetime_price = ?, features = ?
+        SET name = ?, description = ?, monthly_price = ?, yearly_price = ?, lifetime_price = ?, features = ?, monthly_payment_link = ?, yearly_payment_link = ?, lifetime_payment_link = ?
         WHERE id = ?
-      `).run(name, description, monthly_price, yearly_price, lifetime_price, features, req.params.id);
+      `).run(name, description, monthly_price, yearly_price, lifetime_price, features, monthly_payment_link, yearly_payment_link, lifetime_payment_link, req.params.id);
       
       res.json({ success: true });
     } catch (err) {
@@ -1009,19 +1176,37 @@ async function startServer() {
 
   // Check if running in production mode
   const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(__dirname, 'dist'));
+  
+  // Validate production mode has dist folder
+  if (isProduction && !fs.existsSync(path.join(__dirname, 'dist'))) {
+    console.error("[ERROR] Production mode requires running 'npm run build' first!");
+    console.error("[ERROR] Run 'npm run build' to create the dist folder, then try again.");
+    process.exit(1);
+  }
 
-  // Vite middleware for development
-  if (!isProduction) {
+  // Serve static files from dist folder with explicit MIME types
+  if (isProduction) {
+    app.use(express.static(path.join(__dirname, "dist"), {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        } else if (filePath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css');
+        } else if (filePath.endsWith('.json')) {
+          res.setHeader('Content-Type', 'application/json');
+        }
+      }
+    }));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    });
+  } else {
+    // Development mode: use Vite middleware
     const vite = await createViteServer({
       server: { middlewareMode: true, host: '0.0.0.0' },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, "dist")));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(__dirname, "dist", "index.html"));
-    });
   }
 
   const PORT = 3000;

@@ -29,19 +29,27 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
 
   React.useEffect(() => {
     if (item) {
-      setTitle(item.title);
-      setDescription(item.description);
-      setImageUrl(item.image_url);
+      setTitle(item.title || '');
+      setDescription(item.description || '');
+      setImageUrl(item.image_url || '');
       try {
-        setGallery(item.gallery ? JSON.parse(item.gallery) : []);
+        const parsedGallery = item.gallery ? JSON.parse(item.gallery) : [];
+        setGallery(Array.isArray(parsedGallery) ? parsedGallery : []);
       } catch (e) {
         setGallery([]);
       }
       try {
-        setCustomFields(item.custom_fields ? JSON.parse(item.custom_fields) : []);
+        const parsedFields = item.custom_fields ? JSON.parse(item.custom_fields) : [];
+        setCustomFields(Array.isArray(parsedFields) ? parsedFields : []);
       } catch (e) {
         setCustomFields([]);
       }
+    } else {
+      setTitle('');
+      setDescription('');
+      setImageUrl('');
+      setGallery([]);
+      setCustomFields([]);
     }
   }, [item]);
 

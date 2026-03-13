@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Crown, Zap, Star, ExternalLink, Loader2 } from 'lucide-react';
+import { X, Check, Crown, Zap, Star, ExternalLink, Loader2, Camera } from 'lucide-react';
 
 interface BillingPlan {
   id: number;
@@ -10,6 +10,9 @@ interface BillingPlan {
   yearly_price: number;
   lifetime_price: number;
   features: string;
+  monthly_payment_link?: string;
+  yearly_payment_link?: string;
+  lifetime_payment_link?: string;
 }
 
 interface BillingModalProps {
@@ -27,10 +30,17 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
   const [selectedPlan, setSelectedPlan] = useState<BillingPlan | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<'monthly' | 'yearly' | 'lifetime'>('monthly');
   const [subscribing, setSubscribing] = useState(false);
+  const [currentSubscription, setCurrentSubscription] = useState<any>(null);
+  const [paymentProof, setPaymentProof] = useState<string>('');
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [showProofUpload, setShowProofUpload] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       fetchPlans();
+      setCurrentSubscription(null);
+      setShowProofUpload(false);
+      setPaymentProof('');
     }
   }, [isOpen]);
 
@@ -40,10 +50,13 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
       const res = await fetch('/api/billing/plans');
       if (res.ok) {
         const data = await res.json();
-        setPlans(data);
+        setPlans(Array.isArray(data) ? data : []);
+      } else {
+        setPlans([]);
       }
     } catch (err) {
       console.error('Failed to fetch plans:', err);
+      setPlans([]);
     } finally {
       setLoading(false);
     }
@@ -64,8 +77,9 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
 
       if (res.ok) {
         const data = await res.json();
-        alert(`Subscription created! Reference: ${data.reference_code}. You can now proceed to payment.`);
-        onClose();
+        setCurrentSubscription(data);
+        setShowProofUpload(true);
+        alert(`Subscription created!\n\nReference Code: ${data.reference_code}\n\nPlease make payment and upload your payment proof image for verification.`);
       } else {
         const err = await res.json();
         alert(err.error || 'Failed to create subscription');
@@ -76,6 +90,47 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
     } finally {
       setSubscribing(false);
     }
+  };
+
+  const handleUploadProof = async () => {
+    if (!currentSubscription || !paymentProof) return;
+    setUploadingProof(true);
+    try {
+      const res = await fetch(`/api/subscriptions/${currentSubscription.id}/payment-proof`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_proof_image: paymentProof })
+      });
+
+      if (res.ok) {
+        alert('Payment proof uploaded successfully! Your subscription is pending admin approval.');
+        onClose();
+      } else {
+        alert('Failed to upload payment proof');
+      }
+    } catch (err) {
+      console.error('Failed to upload proof:', err);
+      alert('Failed to upload payment proof. Please try again.');
+    } finally {
+      setUploadingProof(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPaymentProof(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const getPaymentLink = (plan: BillingPlan) => {
+    if (selectedDuration === 'monthly') return plan.monthly_payment_link;
+    if (selectedDuration === 'yearly') return plan.yearly_payment_link;
+    return plan.lifetime_payment_link;
   };
 
   const getPrice = (plan: BillingPlan) => {
@@ -211,7 +266,13 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
                         </div>
 
                         <ul className="space-y-3 mb-6">
-                          {JSON.parse(plan.features || '[]').map((feature: string, i: number) => (
+                          {(() => {
+                            try {
+                              return JSON.parse(plan.features || '[]');
+                            } catch (e) {
+                              return [];
+                            }
+                          })().map((feature: string, i: number) => (
                             <li key={i} className="flex items-center gap-2 text-sm text-neutral-600">
                               <Check size={16} className="text-emerald-500 flex-shrink-0" />
                               {feature}
@@ -241,39 +302,109 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
 
             {/* Footer */}
             <div className="p-6 border-t border-neutral-100 bg-neutral-50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-neutral-500">
-                    Selected: <span className="font-bold text-neutral-900">{selectedPlan?.name || 'None'}</span>
-                  </p>
-                  {selectedPlan && (
-                    <p className="text-lg font-black text-emerald-600">
-                      {formatPrice(getPrice(selectedPlan))}
-                      {selectedDuration !== 'lifetime' && `/${selectedDuration === 'monthly' ? 'mo' : 'yr'}`}
+              {showProofUpload && currentSubscription ? (
+                <div className="space-y-4">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+                    <p className="font-bold text-emerald-800 mb-2">Subscription Created!</p>
+                    <p className="text-sm text-emerald-700">
+                      Reference Code: <span className="font-mono font-bold">{currentSubscription.reference_code}</span>
                     </p>
-                  )}
+                    {selectedPlan && getPaymentLink(selectedPlan) && (
+                      <a 
+                        href={getPaymentLink(selectedPlan)} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-sm text-emerald-600 hover:text-emerald-800 mt-2"
+                      >
+                        Open Payment Link <ExternalLink size={14} />
+                      </a>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-bold text-neutral-700 mb-2">
+                      Upload Payment Proof Image
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <label className="flex-1 cursor-pointer">
+                        <input 
+                          type="file" 
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                        <div className="px-4 py-3 border-2 border-dashed border-neutral-300 rounded-xl text-center hover:border-emerald-500 transition-colors">
+                          {paymentProof ? (
+                            <img src={paymentProof} alt="Payment proof" className="max-h-32 mx-auto rounded-lg" />
+                          ) : (
+                            <div className="text-neutral-500">
+                              <Camera size={24} className="mx-auto mb-1" />
+                              <span className="text-sm">Click to upload proof</span>
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleUploadProof}
+                    disabled={!paymentProof || uploadingProof}
+                    className="w-full px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {uploadingProof ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        Submit for Approval
+                        <Check size={20} />
+                      </>
+                    )}
+                  </button>
+                  <p className="text-xs text-neutral-400 text-center">
+                    Your subscription will be activated after admin approval.
+                  </p>
                 </div>
-                <button
-                  onClick={handleSubscribe}
-                  disabled={!selectedPlan || subscribing}
-                  className="px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
-                >
-                  {subscribing ? (
-                    <>
-                      <Loader2 size={20} className="animate-spin" />
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      Subscribe Now
-                      <ExternalLink size={20} />
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-neutral-400 text-center mt-4">
-                By subscribing, you agree to our terms of service. Payment links will be generated after subscription.
-              </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-neutral-500">
+                        Selected: <span className="font-bold text-neutral-900">{selectedPlan?.name || 'None'}</span>
+                      </p>
+                      {selectedPlan && (
+                        <p className="text-lg font-black text-emerald-600">
+                          {formatPrice(getPrice(selectedPlan))}
+                          {selectedDuration !== 'lifetime' && `/${selectedDuration === 'monthly' ? 'mo' : 'yr'}`}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleSubscribe}
+                      disabled={!selectedPlan || subscribing}
+                      className="px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-emerald-200"
+                    >
+                      {subscribing ? (
+                        <>
+                          <Loader2 size={20} className="animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          Subscribe Now
+                          <ExternalLink size={20} />
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-xs text-neutral-400 text-center mt-4">
+                    By subscribing, you agree to our terms of service. Payment links will be generated after subscription.
+                  </p>
+                </>
+              )}
             </div>
           </motion.div>
         </motion.div>

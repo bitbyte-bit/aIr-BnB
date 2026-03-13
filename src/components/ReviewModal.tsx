@@ -30,7 +30,7 @@ export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModal
     if (!item) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/items/${item.id}/reviews`);
+      const res = await fetch(`/api/items/${item.id}/reviews?userId=${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setReviews(data.reviews);

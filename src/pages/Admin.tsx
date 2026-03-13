@@ -5,12 +5,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions'>('analytics');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [billingPlans, setBillingPlans] = useState<any[]>([]);
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
+  const [pendingSubscriptions, setPendingSubscriptions] = useState<any[]>([]);
   const [newItem, setNewItem] = useState({ 
     title: '', 
     description: '', 
@@ -26,6 +27,9 @@ export default function Admin() {
     fetchBusinesses();
     if (activeTab === 'billing') {
       fetchBillingPlans();
+    }
+    if (activeTab === 'subscriptions') {
+      fetchPendingSubscriptions();
     }
   }, [activeTab]);
 
@@ -51,6 +55,34 @@ export default function Admin() {
       }
     } catch (err) {
       console.error('Failed to fetch billing plans:', err);
+    }
+  };
+
+  const fetchPendingSubscriptions = async () => {
+    try {
+      const res = await fetch('/api/admin/subscriptions/pending');
+      if (res.ok) {
+        const data = await res.json();
+        setPendingSubscriptions(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch pending subscriptions:', err);
+    }
+  };
+
+  const handleApproveSubscription = async (subscriptionId: number, status: 'approved' | 'rejected') => {
+    try {
+      const res = await fetch(`/api/admin/subscriptions/${subscriptionId}/approve`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (res.ok) {
+        alert(`Subscription ${status} successfully!`);
+        fetchPendingSubscriptions();
+      }
+    } catch (err) {
+      console.error('Failed to update subscription:', err);
     }
   };
 
@@ -189,7 +221,7 @@ export default function Admin() {
           <p className="text-neutral-500">Manage your platform and community</p>
         </div>
         <div className="flex bg-neutral-100 p-1 rounded-2xl">
-          {(['analytics', 'users', 'businesses', 'billing'] as const).map((tab) => (
+          {(['analytics', 'users', 'businesses', 'billing', 'subscriptions'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -605,6 +637,38 @@ export default function Admin() {
                             />
                           </div>
                         </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Monthly Payment Link</label>
+                            <input
+                              type="url"
+                              value={editingPlan.monthly_payment_link || ''}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, monthly_payment_link: e.target.value })}
+                              placeholder="https://payment.example.com/monthly"
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Yearly Payment Link</label>
+                            <input
+                              type="url"
+                              value={editingPlan.yearly_payment_link || ''}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, yearly_payment_link: e.target.value })}
+                              placeholder="https://payment.example.com/yearly"
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Lifetime Payment Link</label>
+                            <input
+                              type="url"
+                              value={editingPlan.lifetime_payment_link || ''}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, lifetime_payment_link: e.target.value })}
+                              placeholder="https://payment.example.com/lifetime"
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                        </div>
                         <div>
                           <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Description</label>
                           <input
@@ -626,7 +690,10 @@ export default function Admin() {
                                   monthly_price: editingPlan.monthly_price,
                                   yearly_price: editingPlan.yearly_price,
                                   lifetime_price: editingPlan.lifetime_price,
-                                  features: editingPlan.features
+                                  features: editingPlan.features,
+                                  monthly_payment_link: editingPlan.monthly_payment_link,
+                                  yearly_payment_link: editingPlan.yearly_payment_link,
+                                  lifetime_payment_link: editingPlan.lifetime_payment_link
                                 })
                               });
                               if (res.ok) {
@@ -668,6 +735,75 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'subscriptions' && (
+          <motion.div
+            key="subscriptions"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div>
+              <h3 className="text-xl font-bold text-neutral-900">Pending Subscription Approvals</h3>
+              <p className="text-sm text-neutral-500">Review and approve subscription requests from businesses</p>
+            </div>
+
+            {pendingSubscriptions.length === 0 ? (
+              <div className="p-12 bg-neutral-50 rounded-2xl border border-neutral-200 text-center">
+                <CheckCircle size={48} className="mx-auto text-emerald-300 mb-4" />
+                <p className="text-neutral-500">No pending subscriptions to review</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingSubscriptions.map((sub) => (
+                  <div key={sub.id} className="p-6 bg-white rounded-2xl border border-neutral-200">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-neutral-900">{sub.business_name}</h4>
+                        <p className="text-sm text-neutral-500">
+                          Plan: <span className="font-bold">{sub.plan_name}</span>
+                        </p>
+                        <p className="text-sm text-neutral-500">
+                          Reference: <span className="font-mono">{sub.reference_code}</span>
+                        </p>
+                        <p className="text-xs text-neutral-400 mt-1">
+                          Created: {new Date(sub.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleApproveSubscription(sub.id, 'approved')}
+                          className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-1"
+                        >
+                          <CheckCircle size={16} />
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => handleApproveSubscription(sub.id, 'rejected')}
+                          className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 flex items-center gap-1"
+                        >
+                          <XCircle size={16} />
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                    {sub.payment_proof_image && (
+                      <div className="mt-4 pt-4 border-t border-neutral-100">
+                        <p className="text-sm font-bold text-neutral-700 mb-2">Payment Proof:</p>
+                        <img 
+                          src={sub.payment_proof_image} 
+                          alt="Payment proof" 
+                          className="max-h-48 rounded-lg border border-neutral-200"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

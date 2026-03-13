@@ -18,6 +18,7 @@ export default function Home({ user }: { user: User }) {
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
   const [editText, setEditText] = useState('');
+  const [commentAttachment, setCommentAttachment] = useState<string | null>(null);
   
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
@@ -51,6 +52,14 @@ export default function Home({ user }: { user: User }) {
           ...prev,
           [itemId]: [...(prev[itemId] || []), comment]
         }));
+        // Also update comments_count
+        setItems(prev => prev.map(item =>
+          item.id === itemId ? { ...item, comments_count: (item.comments_count || 0) + 1 } : item
+        ));
+      } else if (type === 'share') {
+        setItems(prev => prev.map(item =>
+          item.id === itemId ? { ...item, shares_count: count } : item
+        ));
       }
 
       // Live Activity Toast
@@ -109,6 +118,17 @@ export default function Home({ user }: { user: User }) {
       text: item.description,
       url: shareUrl,
     };
+
+    // Track share in backend
+    try {
+      await fetch(`/api/items/${item.id}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id })
+      });
+    } catch (err) {
+      console.error('Failed to track share:', err);
+    }
 
     if (navigator.share) {
       try {
@@ -170,8 +190,8 @@ export default function Home({ user }: { user: User }) {
     }
   };
 
-  const handlePostComment = async (itemId: string) => {
-    if (!newComment.trim()) return;
+  const handlePostComment = async (itemId: string, attachment?: string | null) => {
+    if (!newComment.trim() && !attachment) return;
     try {
       const res = await fetch(`/api/items/${itemId}/comments`, {
         method: 'POST',
@@ -180,12 +200,14 @@ export default function Home({ user }: { user: User }) {
           userId: user.id, 
           userName: user.name, 
           text: newComment,
-          parentId: replyTo?.id
+          parentId: replyTo?.id,
+          attachment: attachment || commentAttachment
         }),
       });
       if (res.ok) {
         setNewComment('');
         setReplyTo(null);
+        setCommentAttachment(null);
       }
     } catch (err) {
       console.error(err);
@@ -368,6 +390,38 @@ export default function Home({ user }: { user: User }) {
             </div>
           ) : (
             <>
+              {comment.attachment && (
+                <div className="mb-2">
+                  {comment.attachment.match(/^data:image\/\w+/)?.[0] ? (
+                    <img 
+                      src={comment.attachment} 
+                      alt="Attachment" 
+                      className="max-w-full h-auto rounded-lg max-h-48 object-contain"
+                    />
+                  ) : comment.attachment.match(/^data:video\/\w+/)?.[0] ? (
+                    <video 
+                      src={comment.attachment} 
+                      controls 
+                      className="max-w-full h-auto rounded-lg max-h-48"
+                    />
+                  ) : comment.attachment.match(/^data:audio\/\w+/)?.[0] ? (
+                    <audio 
+                      src={comment.attachment} 
+                      controls 
+                      className="w-full"
+                    />
+                  ) : (
+                    <a 
+                      href={comment.attachment} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 p-2 bg-neutral-100 rounded-lg text-sm text-emerald-600 hover:bg-neutral-200"
+                    >
+                      <Paperclip size={14} /> View Attachment
+                    </a>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-neutral-600 leading-relaxed">{comment.text}</p>
               <div className="flex items-center gap-3 mt-1">
                 <button 
@@ -680,7 +734,7 @@ export default function Home({ user }: { user: User }) {
                   className={`flex items-center gap-2 transition-colors ${activeComments === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
                 >
                   <MessageCircle size={18} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Discuss</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider">{item.comments_count || 0}</span>
                 </button>
                 <button 
                   onClick={() => setSelectedItem(item)}
@@ -694,7 +748,7 @@ export default function Home({ user }: { user: User }) {
                   className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
                 >
                   <Share2 size={18} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Share</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider">{item.shares_count || 0}</span>
                 </button>
               </div>
 
@@ -707,6 +761,13 @@ export default function Home({ user }: { user: User }) {
                     className="overflow-hidden"
                   >
                     <div className="pt-6 space-y-4">
+                      <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+                        {renderComments(item.id)}
+                        {(!comments[item.id] || comments[item.id].length === 0) && (
+                          <p className="text-center text-xs text-neutral-400 py-4 italic">No comments yet. Be the first!</p>
+                        )}
+                      </div>
+
                       <div className="space-y-2">
                         {replyTo && (
                           <div className="flex items-center justify-between px-3 py-1 bg-emerald-50 rounded-lg border border-emerald-100">
@@ -721,7 +782,7 @@ export default function Home({ user }: { user: User }) {
                             </button>
                           </div>
                         )}
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
                           <input
                             type="text"
                             placeholder={replyTo ? "Write a reply..." : "Add a comment..."}
@@ -730,20 +791,47 @@ export default function Home({ user }: { user: User }) {
                             onKeyDown={(e) => e.key === 'Enter' && handlePostComment(item.id)}
                             className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                           />
+                          <label className="p-2 text-neutral-400 hover:text-emerald-600 cursor-pointer transition-colors">
+                            <input
+                              type="file"
+                              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  // In production, upload to server/cloud storage
+                                  // For now, use base64 as placeholder
+                                  const reader = new FileReader();
+                                  reader.onload = () => {
+                                    setCommentAttachment(reader.result as string);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }}
+                              className="hidden"
+                            />
+                            <Paperclip size={18} />
+                          </label>
+                          {commentAttachment && (
+                            <div className="relative">
+                              <img src={commentAttachment} alt="Attachment" className="w-10 h-10 object-cover rounded-lg" />
+                              <button
+                                onClick={() => setCommentAttachment(null)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
+                          )}
                           <button
-                            onClick={() => handlePostComment(item.id)}
+                            onClick={() => {
+                              handlePostComment(item.id);
+                              setCommentAttachment(null);
+                            }}
                             className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
                           >
                             <Send size={18} />
                           </button>
                         </div>
-                      </div>
-
-                      <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                        {renderComments(item.id)}
-                        {(!comments[item.id] || comments[item.id].length === 0) && (
-                          <p className="text-center text-xs text-neutral-400 py-4 italic">No comments yet. Be the first!</p>
-                        )}
                       </div>
                     </div>
                   </motion.div>

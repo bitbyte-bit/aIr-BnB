@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server.ts",
-    "start": "set NODE_ENV=production&& tsx server.ts",
+    "dev": "node server.js",
+    "start": "set NODE_ENV=production&& node server.js",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",

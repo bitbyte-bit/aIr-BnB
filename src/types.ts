@@ -9,6 +9,32 @@ export interface User {
   business_id?: number;
 }
 
+export interface BillingPlan {
+  id: number;
+  name: string;
+  description: string;
+  monthly_price: number;
+  yearly_price: number;
+  lifetime_price: number;
+  features: string;
+  monthly_payment_link?: string;
+  yearly_payment_link?: string;
+  lifetime_payment_link?: string;
+}
+
+export interface BusinessSubscription {
+  id: number;
+  business_id: number;
+  plan_id: number;
+  status: 'pending' | 'approved' | 'rejected';
+  start_date?: string;
+  end_date?: string;
+  payment_link?: string;
+  reference_code?: string;
+  payment_proof_image?: string;
+  created_at: string;
+}
+
 export interface Item {
   id: string;
   title: string;
@@ -18,6 +44,8 @@ export interface Item {
   custom_fields?: string; // JSON string of key-value pairs
   created_at: string;
   likes?: number;
+  comments_count?: number;
+  shares_count?: number;
   followers_count?: number;
   business_id?: number;
   business_name?: string;
@@ -56,6 +84,7 @@ export interface Comment {
   user_id: number;
   user_name: string;
   text: string;
+  attachment?: string;
   parent_id?: number | null;
   created_at: string;
 }
