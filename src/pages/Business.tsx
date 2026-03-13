@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2 } from 'lucide-react';
+import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2, Power } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Business, Message, SocialHandle } from '../types';
 import ProfileCodes from '../components/ProfileCodes';
 import BillingModal from '../components/BillingModal';
+import EditItemModal from '../components/EditItemModal';
 
 export default function BusinessPage({ user, business, onUpdate }: { user: User; business: Business | null; onUpdate: () => void }) {
   const [name, setName] = useState(business?.name || '');
@@ -42,6 +43,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   const [showProfileCodes, setShowProfileCodes] = useState(false);
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [billingStats, setBillingStats] = useState({ itemCount: 0, totalLikes: 0, needsBilling: false });
+  const [editingItem, setEditingItem] = useState<any | null>(null);
 
   useEffect(() => {
     fetchBusinessTypes();
@@ -297,6 +299,22 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       if (res.ok) {
         fetchBusinessItems();
         fetchAnalytics();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleItemStatus = async (itemId: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/api/items/${itemId}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+      if (res.ok) {
+        const updatedItem = await res.json();
+        setBusinessItems(prev => prev.map(item => item.id === itemId ? updatedItem : item));
       }
     } catch (err) {
       console.error(err);
@@ -1004,12 +1022,27 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                   <div key={item.id} className="bg-white rounded-3xl border border-neutral-200 overflow-hidden shadow-sm group">
                     <div className="aspect-square overflow-hidden relative">
                       <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                      <button 
-                        onClick={() => handleDeleteItem(item.id)}
-                        className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="absolute top-4 right-4 flex gap-2">
+                        <button 
+                          onClick={() => handleToggleItemStatus(item.id, item.is_active !== false)}
+                          className={`p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-sm transition-colors ${item.is_active !== false ? 'text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'text-neutral-500 hover:bg-neutral-600 hover:text-white'}`}
+                          title={item.is_active !== false ? 'Deactivate' : 'Activate'}
+                        >
+                          <Power size={18} />
+                        </button>
+                        <button 
+                          onClick={() => setEditingItem(item)}
+                          className="p-2 bg-white/90 backdrop-blur-sm text-neutral-700 rounded-xl shadow-sm hover:bg-emerald-600 hover:text-white transition-colors"
+                        >
+                          <Edit3 size={18} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteItem(item.id)}
+                          className="p-2 bg-white/90 backdrop-blur-sm text-red-500 rounded-xl shadow-sm hover:bg-red-600 hover:text-white transition-colors"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                     <div className="p-4">
                       <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
@@ -1018,9 +1051,9 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                           {new Date(item.created_at).toLocaleDateString()}
                         </span>
-                        <div className="flex items-center gap-1 text-emerald-600">
-                          <CheckCircle size={14} />
-                          <span className="text-[10px] font-bold uppercase">Live</span>
+                        <div className={`flex items-center gap-1 ${item.is_active !== false ? 'text-emerald-600' : 'text-red-500'}`}>
+                          {item.is_active !== false ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                          <span className="text-[10px] font-bold uppercase">{item.is_active !== false ? 'Live' : 'Inactive'}</span>
                         </div>
                       </div>
                     </div>
@@ -1054,6 +1087,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
           totalLikes={billingStats.totalLikes}
         />
       )}
+
+      {/* Edit Item Modal */}
+      <EditItemModal
+        isOpen={!!editingItem}
+        onClose={() => setEditingItem(null)}
+        item={editingItem}
+        onSave={(updatedItem) => {
+          setBusinessItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
+        }}
+      />
     </div>
   );
 }

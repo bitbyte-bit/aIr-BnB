@@ -22,6 +22,7 @@ export interface Item {
   business_id?: number;
   business_name?: string;
   is_approved?: boolean;
+  is_active?: boolean;
   reviews?: Review[];
   average_rating?: number;
   subscription_status?: string;

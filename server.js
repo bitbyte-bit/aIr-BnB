@@ -103,6 +103,7 @@ db.exec(`
     gallery TEXT,
     custom_fields TEXT,
     business_id INTEGER,
+    is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(business_id) REFERENCES businesses(id)
   );
@@ -537,6 +538,35 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: "Failed to delete item" });
+    }
+  });
+
+  app.put("/api/items/:id", (req, res) => {
+    const { title, description, image_url, gallery, custom_fields, is_active } = req.body;
+    try {
+      db.prepare(`
+        UPDATE items 
+        SET title = ?, description = ?, image_url = COALESCE(?, image_url), gallery = COALESCE(?, gallery), custom_fields = COALESCE(?, custom_fields), is_active = COALESCE(?, is_active)
+        WHERE id = ?
+      `).run(title, description, image_url, gallery, custom_fields, is_active, req.params.id);
+      
+      const updatedItem = db.prepare("SELECT * FROM items WHERE id = ?").get(req.params.id);
+      res.json(updatedItem);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update item" });
+    }
+  });
+
+  // Toggle item active status
+  app.patch("/api/items/:id/status", (req, res) => {
+    const { is_active } = req.body;
+    try {
+      db.prepare("UPDATE items SET is_active = ? WHERE id = ?").run(is_active ? 1 : 0, req.params.id);
+      
+      const updatedItem = db.prepare("SELECT * FROM items WHERE id = ?").get(req.params.id);
+      res.json(updatedItem);
+    } catch (err) {
+      res.status(500).json({ error: "Failed to update item status" });
     }
   });
 
