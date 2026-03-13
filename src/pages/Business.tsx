@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Business, Message, SocialHandle } from '../types';
+import ProfileCodes from '../components/ProfileCodes';
+import BillingModal from '../components/BillingModal';
 
 export default function BusinessPage({ user, business, onUpdate }: { user: User; business: Business | null; onUpdate: () => void }) {
   const [name, setName] = useState(business?.name || '');
@@ -37,6 +39,9 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   
   const logoInputRef = useRef<HTMLInputElement>(null);
   const itemImageInputRef = useRef<HTMLInputElement>(null);
+  const [showProfileCodes, setShowProfileCodes] = useState(false);
+  const [showBillingModal, setShowBillingModal] = useState(false);
+  const [billingStats, setBillingStats] = useState({ itemCount: 0, totalLikes: 0, needsBilling: false });
 
   useEffect(() => {
     fetchBusinessTypes();
@@ -45,6 +50,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   useEffect(() => {
     if (business) {
       fetchAnalytics();
+      checkBillingStatus();
       setName(business.name);
       setDescription(business.description);
       setLogo(business.logo || '');
@@ -297,6 +303,22 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     }
   };
 
+  const checkBillingStatus = async () => {
+    if (!business) return;
+    try {
+      const res = await fetch(`/api/businesses/${business.id}/billing-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setBillingStats(data);
+        if (data.needsBilling) {
+          setShowBillingModal(true);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check billing status:', err);
+    }
+  };
+
   if (!business || isEditingProfile) {
     return (
       <div className="max-w-2xl mx-auto space-y-8">
@@ -544,6 +566,12 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
           className="p-3 bg-neutral-100 text-neutral-600 rounded-2xl hover:bg-neutral-200 transition-colors"
         >
           <Edit3 size={20} />
+        </button>
+        <button 
+          onClick={() => setShowProfileCodes(true)}
+          className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors"
+        >
+          <Share2 size={20} />
         </button>
       </header>
 
@@ -1002,6 +1030,29 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
             )}
           </div>
         </div>
+      )}
+
+      {/* Profile Codes Modal */}
+      {business && (
+        <ProfileCodes
+          isOpen={showProfileCodes}
+          onClose={() => setShowProfileCodes(false)}
+          profileType="business"
+          profileId={business.id}
+          profileName={business.name}
+        />
+      )}
+
+      {/* Billing Modal */}
+      {business && (
+        <BillingModal
+          isOpen={showBillingModal}
+          onClose={() => setShowBillingModal(false)}
+          businessId={business.id}
+          businessName={business.name}
+          itemCount={billingStats.itemCount}
+          totalLikes={billingStats.totalLikes}
+        />
       )}
     </div>
   );

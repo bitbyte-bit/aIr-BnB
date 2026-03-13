@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { User as UserType } from '../types';
+import PasswordInput from '../components/PasswordInput';
 
 export default function Auth({ onLogin }: { onLogin: (user: UserType) => void }) {
   const [isLogin, setIsLogin] = useState(true);
@@ -85,15 +86,25 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
             />
           </div>
           <div className="relative">
-            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-            <input
-              type="password"
-              placeholder="Password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-            />
+            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
+            {!isLogin ? (
+              <div className="pt-2">
+                <PasswordInput
+                  value={password}
+                  onChange={setPassword}
+                  placeholder="Password"
+                />
+              </div>
+            ) : (
+              <input
+                type="password"
+                placeholder="Password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+              />
+            )}
           </div>
 
           <button

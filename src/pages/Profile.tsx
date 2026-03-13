@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Camera, Save, User as UserIcon, Briefcase, MapPin, Phone, Globe, Mail, ArrowLeft } from 'lucide-react';
+import { Camera, Save, User as UserIcon, Briefcase, MapPin, Phone, Globe, Mail, ArrowLeft, QrCode, Share2, Lock } from 'lucide-react';
 import { motion } from 'motion/react';
 import { User, Business, SocialHandle } from '../types';
 import { Plus, Trash2 } from 'lucide-react';
+import OpenGraphMeta from '../components/OpenGraphMeta';
+import ProfileCodes from '../components/ProfileCodes';
+import PasswordChangeModal from '../components/PasswordChangeModal';
 
 export default function Profile({ user: currentUser, onUpdate }: { user: User; onUpdate: (user: User) => void }) {
   const { userId } = useParams();
@@ -32,6 +35,8 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
   const [isAddingCustomType, setIsAddingCustomType] = useState(false);
   const [customType, setCustomType] = useState('');
   const businessLogoRef = useRef<HTMLInputElement>(null);
+  const [showProfileCodes, setShowProfileCodes] = useState(false);
+  const [showPasswordChange, setShowPasswordChange] = useState(false);
 
   useEffect(() => {
     if (!isOwnProfile && userId) {
@@ -187,17 +192,45 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-12 pb-20">
+    <>
+      <OpenGraphMeta
+        title={`${targetUser.name} - Vitu Profile`}
+        description={targetUser.bio || `Check out ${targetUser.name}'s profile on Vitu`}
+        image={targetUser.profile_picture || `https://picsum.photos/seed/user-${targetUser.id}/1200/630`}
+        url={`${typeof window !== 'undefined' ? window.location.origin : ''}/profile/${targetUser.id}`}
+        type="profile"
+      />
+      <div className="max-w-2xl mx-auto space-y-12 pb-20">
       <header className="flex items-center gap-4">
         {!isOwnProfile && (
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
             <ArrowLeft size={24} />
           </button>
         )}
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl font-bold tracking-tight">{isOwnProfile ? 'Your Profile' : `${targetUser.name}'s Profile`}</h1>
           <p className="text-neutral-500">{isOwnProfile ? 'Manage your public information' : 'Public profile information'}</p>
         </div>
+        {isOwnProfile && (
+          <button
+            type="button"
+            onClick={() => setShowProfileCodes(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors"
+          >
+            <Share2 size={18} />
+            Share Code
+          </button>
+        )}
+        {isOwnProfile && (
+          <button
+            type="button"
+            onClick={() => setShowPasswordChange(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-neutral-100 text-neutral-700 font-bold rounded-xl hover:bg-neutral-200 transition-colors"
+          >
+            <Lock size={18} />
+            Change Password
+          </button>
+        )}
       </header>
 
       <form onSubmit={handleSubmit} className="space-y-12">
@@ -491,6 +524,24 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
           </button>
         )}
       </form>
+
+      {/* Profile Codes Modal */}
+      <ProfileCodes
+        isOpen={showProfileCodes}
+        onClose={() => setShowProfileCodes(false)}
+        profileType={business ? 'business' : 'user'}
+        profileId={business ? business.id : currentUser.id}
+        profileName={business ? business.name : currentUser.name}
+      />
+
+      {/* Password Change Modal */}
+      <PasswordChangeModal
+        isOpen={showPasswordChange}
+        onClose={() => setShowPasswordChange(false)}
+        userId={currentUser.id}
+        userName={currentUser.name}
+      />
     </div>
+    </>
   );
 }

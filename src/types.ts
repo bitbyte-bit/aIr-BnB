@@ -22,6 +22,10 @@ export interface Item {
   business_id?: number;
   business_name?: string;
   is_approved?: boolean;
+  reviews?: Review[];
+  average_rating?: number;
+  subscription_status?: string;
+  subscription_plan?: string;
 }
 
 export interface Business {
@@ -52,6 +56,17 @@ export interface Comment {
   user_name: string;
   text: string;
   parent_id?: number | null;
+  created_at: string;
+}
+
+export interface Review {
+  id: number;
+  item_id: number;
+  user_id: number;
+  user_name: string;
+  user_avatar?: string;
+  rating: number; // 1-5 stars
+  text?: string;
   created_at: string;
 }
 

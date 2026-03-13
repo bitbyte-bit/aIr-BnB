@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
 import { Item, User, Comment, Business, Message } from '../types';
+import OpenGraphMeta from '../components/OpenGraphMeta';
+import ReviewModal from '../components/ReviewModal';
 
 export default function Home({ user }: { user: User }) {
   const { itemId } = useParams();
@@ -29,6 +31,9 @@ export default function Home({ user }: { user: User }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ items: Item[]; businesses: Business[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+
+  const [reviewItem, setReviewItem] = useState<Item | null>(null);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
 
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
@@ -397,7 +402,17 @@ export default function Home({ user }: { user: User }) {
   }
 
   return (
-    <div className="space-y-8">
+    <>
+      {selectedItem && (
+        <OpenGraphMeta
+          title={`${selectedItem.title} - Vitu`}
+          description={selectedItem.description}
+          image={selectedItem.image_url}
+          url={`${typeof window !== 'undefined' ? window.location.origin : ''}/item/${selectedItem.id}`}
+          type="article"
+        />
+      )}
+      <div className="space-y-8">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-neutral-900">Discover</h1>
@@ -516,13 +531,19 @@ export default function Home({ user }: { user: User }) {
               <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Products & Services</h4>
               <div className="grid gap-6 sm:grid-cols-2">
                 {searchResults.items.map(item => (
-                  <div key={item.id} className="bg-white rounded-[2.5rem] border border-neutral-200 overflow-hidden shadow-sm hover:shadow-xl transition-all group">
+                  <div key={item.id} className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-sm hover:shadow-xl transition-all group ${
+                    item.subscription_plan === 'Lifetime' ? 'border-yellow-400' :
+                    item.subscription_plan === 'Standard' ? 'border-emerald-500' :
+                    item.subscription_plan === 'Starter' ? 'border-orange-400' :
+                    item.subscription_status === 'active' ? 'border-neutral-200' : 'border-red-400'
+                  }`}>
                     <div className="relative aspect-square overflow-hidden">
                       <img 
                         src={item.image_url} 
                         alt={item.title} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 cursor-pointer"
                         referrerPolicy="no-referrer"
+                        onClick={() => { setReviewItem(item); setIsReviewModalOpen(true); }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                       <div className="absolute top-4 right-4 flex flex-col gap-2">
@@ -537,6 +558,12 @@ export default function Home({ user }: { user: User }) {
                           <Users size={20} className="text-emerald-600" />
                           <span className="text-sm font-bold">{item.followers_count || 0}</span>
                         </div>
+                        {item.average_rating ? (
+                          <div className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 shadow-lg flex items-center gap-2">
+                            <Star size={20} className="text-yellow-500 fill-yellow-500" />
+                            <span className="text-sm font-bold">{Number(item.average_rating).toFixed(1)}</span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                     <div className="p-6">
@@ -574,14 +601,25 @@ export default function Home({ user }: { user: User }) {
             key={item.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="group bg-white rounded-3xl overflow-hidden border border-neutral-200 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col"
+            className={`group bg-white rounded-3xl overflow-hidden border-2 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col ${
+              item.subscription_plan === 'Lifetime' ? 'border-yellow-400 shadow-yellow-100' :
+              item.subscription_plan === 'Standard' ? 'border-emerald-500 shadow-emerald-100' :
+              item.subscription_plan === 'Starter' ? 'border-orange-400 shadow-orange-100' :
+              item.subscription_status === 'active' ? 'border-neutral-200' : 'border-red-400 shadow-red-100'
+            }`}
           >
-            <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
+            <div className={`aspect-[4/3] overflow-hidden bg-neutral-100 ${
+              item.subscription_plan === 'Lifetime' ? 'ring-4 ring-yellow-100' :
+              item.subscription_plan === 'Standard' ? 'ring-4 ring-emerald-100' :
+              item.subscription_plan === 'Starter' ? 'ring-4 ring-orange-100' :
+              item.subscription_status === 'active' ? '' : 'ring-4 ring-red-100'
+            }`}>
               <img
                 src={item.image_url || `https://picsum.photos/seed/${item.id}/800/600`}
                 alt={item.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 cursor-pointer"
                 referrerPolicy="no-referrer"
+                onClick={() => { setReviewItem(item); setIsReviewModalOpen(true); }}
               />
             </div>
             <div className="p-6 flex-1 flex flex-col">
@@ -589,13 +627,29 @@ export default function Home({ user }: { user: User }) {
                 <div>
                   <h3 className="text-xl font-bold text-neutral-900">{item.title}</h3>
                   {item.business_name && (
-                    <button 
-                      onClick={() => openBusinessProfile(item.business_id!)}
-                      className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
-                    >
-                      By {item.business_name}
-                      {item.is_approved ? <CheckCircle size={12} className="fill-emerald-100" /> : null}
-                    </button>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button 
+                        onClick={() => openBusinessProfile(item.business_id!)}
+                        className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
+                      >
+                        By {item.business_name}
+                        {item.is_approved ? <CheckCircle size={12} className="fill-emerald-100" /> : null}
+                      </button>
+                      {item.subscription_plan && (
+                        <span className={`px-2 py-0.5 text-[8px] font-bold rounded-full uppercase ${
+                          item.subscription_plan === 'Lifetime' ? 'bg-yellow-100 text-yellow-700' :
+                          item.subscription_plan === 'Standard' ? 'bg-emerald-100 text-emerald-700' :
+                          'bg-orange-100 text-orange-700'
+                        }`}>
+                          {item.subscription_plan}
+                        </span>
+                      )}
+                      {!item.subscription_status && (
+                        <span className="px-2 py-0.5 text-[8px] font-bold rounded-full bg-red-100 text-red-700 uppercase">
+                          Free
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
@@ -603,6 +657,12 @@ export default function Home({ user }: { user: User }) {
                     <Users size={18} className="text-emerald-500" />
                     <span className="text-sm font-medium">{item.followers_count || 0}</span>
                   </div>
+                  {item.average_rating ? (
+                    <div className="flex items-center gap-1 text-yellow-500">
+                      <Star size={18} className="fill-current" />
+                      <span className="text-sm font-medium">{Number(item.average_rating).toFixed(1)}</span>
+                    </div>
+                  ) : null}
                   <button
                     onClick={() => handleLike(item.id)}
                     className="flex items-center gap-1.5 text-neutral-400 hover:text-red-500 transition-colors"
@@ -1036,6 +1096,15 @@ export default function Home({ user }: { user: User }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Review Modal */}
+      <ReviewModal 
+        item={reviewItem} 
+        user={user} 
+        isOpen={isReviewModalOpen} 
+        onClose={() => { setIsReviewModalOpen(false); setReviewItem(null); }}
+      />
     </div>
+    </>
   );
 }

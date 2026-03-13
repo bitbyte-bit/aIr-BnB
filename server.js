@@ -33,6 +33,55 @@ try {
   console.error("Migration error:", e);
 }
 
+// Seed billing plans if they don't exist
+try {
+  const plansExist = db.prepare("SELECT COUNT(*) as count FROM billing_plans").get();
+  if (!plansExist || plansExist.count === 0) {
+    // Starter plan
+    db.prepare(`
+      INSERT INTO billing_plans (name, description, monthly_price, yearly_price, lifetime_price, features)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      'Starter',
+      'Perfect for small businesses just getting started',
+      10000,
+      108000, // 10% discount: 120000 - 10% = 108000
+      500000, // 5 months (5 * 10000 = 50000) - 40% discount
+      JSON.stringify(['Up to 50 items', 'Basic analytics', 'Email support', 'Standard visibility'])
+    );
+    
+    // Standard plan
+    db.prepare(`
+      INSERT INTO billing_plans (name, description, monthly_price, yearly_price, lifetime_price, features)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      'Standard',
+      'Best for growing businesses with more needs',
+      30000,
+      288000, // 20% discount: 360000 - 20% = 288000
+      1000000, // 5 months (5 * 30000 = 150000) - 40% discount
+      JSON.stringify(['Unlimited items', 'Advanced analytics', 'Priority support', 'Top visibility', 'Custom branding'])
+    );
+    
+    // Lifetime plan
+    db.prepare(`
+      INSERT INTO billing_plans (name, description, monthly_price, yearly_price, lifetime_price, features)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      'Lifetime',
+      'Best value - pay once, enjoy forever',
+      0,
+      0,
+      2000000,
+      JSON.stringify(['Unlimited everything', 'Lifetime updates', '24/7 Premium support', 'Featured listings', 'White-label options', 'API access'])
+    );
+    
+    console.log("Billing plans seeded successfully");
+  }
+} catch (e) {
+  console.error("Error seeding billing plans:", e);
+}
+
 // Initialize Database
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -85,6 +134,44 @@ db.exec(`
     FOREIGN KEY(item_id) REFERENCES items(id),
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(parent_id) REFERENCES comments(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_id TEXT,
+    user_id INTEGER,
+    user_name TEXT,
+    rating INTEGER NOT NULL CHECK(rating >= 1 AND rating <= 5),
+    text TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(item_id) REFERENCES items(id),
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    UNIQUE(user_id, item_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS billing_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    monthly_price INTEGER NOT NULL DEFAULT 0,
+    yearly_price INTEGER NOT NULL DEFAULT 0,
+    lifetime_price INTEGER NOT NULL DEFAULT 0,
+    features TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS business_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    business_id INTEGER NOT NULL,
+    plan_id INTEGER,
+    status TEXT DEFAULT 'inactive',
+    start_date DATETIME,
+    end_date DATETIME,
+    payment_link TEXT,
+    reference_code TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(business_id) REFERENCES businesses(id),
+    FOREIGN KEY(plan_id) REFERENCES billing_plans(id)
   );
 
   CREATE TABLE IF NOT EXISTS businesses (
@@ -194,6 +281,21 @@ async function startServer() {
   // Auth Routes
   app.post("/api/auth/signup", (req, res) => {
     const { email, password, name } = req.body;
+    
+    // Validate password requirements
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+    if (!/[A-Z]/.test(password)) {
+      return res.status(400).json({ error: "Password must contain at least one uppercase letter" });
+    }
+    if (!/[a-z]/.test(password)) {
+      return res.status(400).json({ error: "Password must contain at least one lowercase letter" });
+    }
+    if (!/[0-9]/.test(password)) {
+      return res.status(400).json({ error: "Password must contain at least one numeric character" });
+    }
+    
     try {
       const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
       const role = userCount === 0 ? 'admin' : 'user';
@@ -239,6 +341,46 @@ async function startServer() {
     const { name, bio, profile_picture } = req.body;
     db.prepare("UPDATE users SET name = ?, bio = ?, profile_picture = ? WHERE id = ?").run(name, bio, profile_picture, req.params.id);
     res.json({ success: true });
+  });
+
+  app.put("/api/profile/:id/password", (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+    const userId = parseInt(req.params.id);
+    
+    // Validate password requirements
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one uppercase letter" });
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one lowercase letter" });
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one numeric character" });
+    }
+    
+    try {
+      // Get current password hash
+      const user = db.prepare("SELECT password FROM users WHERE id = ?").get(userId);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      // For simplicity, we're comparing directly. In production, use bcrypt
+      if (user.password !== currentPassword) {
+        return res.status(400).json({ error: "Current password is incorrect" });
+      }
+      
+      // Update password
+      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(newPassword, userId);
+      
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to change password" });
+    }
   });
 
   // Business Routes
@@ -323,12 +465,38 @@ async function startServer() {
     const items = db.prepare(`
       SELECT items.*, businesses.name as business_name, businesses.is_approved,
       (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
-      (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count
+      (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
+      (SELECT bs.status FROM business_subscriptions bs WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_status,
+      (SELECT bp.name FROM business_subscriptions bs JOIN billing_plans bp ON bs.plan_id = bp.id WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_plan
       FROM items 
       LEFT JOIN businesses ON items.business_id = businesses.id 
       ORDER BY created_at DESC
     `).all();
     res.json(items);
+  });
+
+  // Get single item by ID
+  app.get("/api/items/:id", (req, res) => {
+    try {
+      const item = db.prepare(`
+        SELECT items.*, businesses.name as business_name, businesses.is_approved,
+        (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+        (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments_count,
+        (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
+        (SELECT AVG(rating) FROM reviews WHERE item_id = items.id) as average_rating,
+        (SELECT COUNT(*) FROM reviews WHERE item_id = items.id) as reviews_count
+        FROM items 
+        LEFT JOIN businesses ON items.business_id = businesses.id 
+        WHERE items.id = ?
+      `).get(req.params.id);
+      
+      if (!item) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      res.json(item);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/items", (req, res) => {
@@ -423,6 +591,220 @@ async function startServer() {
       res.json({ success: true });
     } catch (err) {
       res.json({ success: false, message: "Already liked" });
+    }
+  });
+
+  // Reviews Routes
+  app.get("/api/items/:id/reviews", (req, res) => {
+    try {
+      const reviews = db.prepare(`
+        SELECT reviews.*, users.profile_picture as user_avatar 
+        FROM reviews 
+        LEFT JOIN users ON reviews.user_id = users.id 
+        WHERE item_id = ? 
+        ORDER BY created_at DESC
+      `).all(req.params.id);
+      
+      // Get average rating
+      const avgRating = db.prepare(
+        "SELECT AVG(rating) as average_rating, COUNT(*) as total_reviews FROM reviews WHERE item_id = ?"
+      ).get(req.params.id);
+      
+      res.json({ reviews, average_rating: avgRating?.average_rating || 0, total_reviews: avgRating?.total_reviews || 0 });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/items/:id/reviews", (req, res) => {
+    const { userId, userName, rating, text } = req.body;
+    const itemId = req.params.id;
+    
+    try {
+      // Check if user already reviewed this item
+      const existingReview = db.prepare(
+        "SELECT id FROM reviews WHERE item_id = ? AND user_id = ?"
+      ).get(itemId, userId);
+      
+      if (existingReview) {
+        // Update existing review
+        db.prepare(
+          "UPDATE reviews SET rating = ?, text = ? WHERE item_id = ? AND user_id = ?"
+        ).run(rating, text || null, itemId, userId);
+        
+        const updatedReview = db.prepare(
+          "SELECT reviews.*, users.profile_picture as user_avatar FROM reviews LEFT JOIN users ON reviews.user_id = users.id WHERE item_id = ? AND user_id = ?"
+        ).get(itemId, userId);
+        
+        return res.json(updatedReview);
+      }
+      
+      const info = db.prepare(
+        "INSERT INTO reviews (item_id, user_id, user_name, rating, text) VALUES (?, ?, ?, ?, ?)"
+      ).run(itemId, userId, userName, rating, text || null);
+      
+      const newReview = db.prepare(
+        "SELECT reviews.*, users.profile_picture as user_avatar FROM reviews LEFT JOIN users ON reviews.user_id = users.id WHERE reviews.id = ?"
+      ).get(info.lastInsertRowid);
+      
+      // Emit notification
+      const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
+      io.emit("notification", {
+        type: 'review',
+        title: 'New Review!',
+        body: `${userName} reviewed ${item.title}`
+      });
+      
+      res.json(newReview);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Billing Routes
+  app.get("/api/billing/plans", (req, res) => {
+    try {
+      const plans = db.prepare("SELECT * FROM billing_plans ORDER BY monthly_price ASC").all();
+      res.json(plans);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/businesses/:id/subscription", (req, res) => {
+    try {
+      const subscription = db.prepare(`
+        SELECT bs.*, bp.name as plan_name, bp.monthly_price, bp.yearly_price, bp.lifetime_price, bp.features
+        FROM business_subscriptions bs
+        LEFT JOIN billing_plans bp ON bs.plan_id = bp.id
+        WHERE bs.business_id = ?
+        ORDER BY bs.created_at DESC
+        LIMIT 1
+      `).get(req.params.id);
+      res.json(subscription || null);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/businesses/:id/subscription", (req, res) => {
+    const { planId, duration } = req.body;
+    const businessId = req.params.id;
+    
+    try {
+      const plan = db.prepare("SELECT * FROM billing_plans WHERE id = ?").get(planId);
+      if (!plan) {
+        return res.status(404).json({ error: "Plan not found" });
+      }
+      
+      let price = 0;
+      let endDate = null;
+      
+      if (duration === 'monthly') {
+        price = plan.monthly_price;
+        endDate = new Date();
+        endDate.setMonth(endDate.getMonth() + 1);
+      } else if (duration === 'yearly') {
+        price = plan.yearly_price;
+        endDate = new Date();
+        endDate.setFullYear(endDate.getFullYear() + 1);
+      } else if (duration === 'lifetime') {
+        price = plan.lifetime_price;
+        endDate = new Date('2099-12-31');
+      }
+      
+      // Generate reference code
+      const refCode = `VITU-SUB-${businessId}-${Date.now()}`;
+      
+      const info = db.prepare(`
+        INSERT INTO business_subscriptions (business_id, plan_id, status, start_date, end_date, reference_code)
+        VALUES (?, ?, 'pending', datetime('now'), ?, ?)
+      `).run(businessId, planId, endDate ? endDate.toISOString() : null, refCode);
+      
+      const subscription = db.prepare("SELECT * FROM business_subscriptions WHERE id = ?").get(info.lastInsertRowid);
+      res.json({ ...subscription, price });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/businesses/:id/billing-status", (req, res) => {
+    try {
+      const businessId = req.params.id;
+      
+      // Get item count and total likes
+      const stats = db.prepare(`
+        SELECT 
+          COUNT(DISTINCT i.id) as item_count,
+          COALESCE(SUM(likes.like_count), 0) as total_likes
+        FROM items i
+        LEFT JOIN (
+          SELECT item_id, COUNT(*) as like_count 
+          FROM likes 
+          GROUP BY item_id
+        ) likes ON i.id = likes.item_id
+        WHERE i.business_id = ?
+      `).get(businessId);
+      
+      // Get current subscription
+      const subscription = db.prepare(`
+        SELECT bs.*, bp.name as plan_name
+        FROM business_subscriptions bs
+        LEFT JOIN billing_plans bp ON bs.plan_id = bp.id
+        WHERE bs.business_id = ? AND bs.status = 'active'
+        ORDER BY bs.created_at DESC
+        LIMIT 1
+      `).get(businessId);
+      
+      const needsBilling = stats.item_count >= 10 && stats.total_likes >= 20 && !subscription;
+      
+      res.json({
+        itemCount: stats.item_count,
+        totalLikes: stats.total_likes,
+        needsBilling,
+        subscription
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin billing settings
+  app.get("/api/admin/billing-settings", (req, res) => {
+    try {
+      const plans = db.prepare("SELECT * FROM billing_plans").all();
+      res.json(plans);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.put("/api/admin/billing-plans/:id", (req, res) => {
+    const { name, description, monthly_price, yearly_price, lifetime_price, features, payment_link } = req.body;
+    try {
+      db.prepare(`
+        UPDATE billing_plans 
+        SET name = ?, description = ?, monthly_price = ?, yearly_price = ?, lifetime_price = ?, features = ?
+        WHERE id = ?
+      `).run(name, description, monthly_price, yearly_price, lifetime_price, features, req.params.id);
+      
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post("/api/admin/billing-plans", (req, res) => {
+    const { name, description, monthly_price, yearly_price, lifetime_price, features } = req.body;
+    try {
+      const info = db.prepare(`
+        INSERT INTO billing_plans (name, description, monthly_price, yearly_price, lifetime_price, features)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(name, description, monthly_price, yearly_price, lifetime_price, features);
+      
+      res.json({ id: info.lastInsertRowid, success: true });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
     }
   });
 

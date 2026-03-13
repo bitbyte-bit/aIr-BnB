@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing'>('analytics');
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [billingPlans, setBillingPlans] = useState<any[]>([]);
+  const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [newItem, setNewItem] = useState({ 
     title: '', 
     description: '', 
@@ -22,7 +24,10 @@ export default function Admin() {
     fetchAnalytics();
     fetchUsers();
     fetchBusinesses();
-  }, []);
+    if (activeTab === 'billing') {
+      fetchBillingPlans();
+    }
+  }, [activeTab]);
 
   const fetchAnalytics = async () => {
     try {
@@ -34,6 +39,18 @@ export default function Admin() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBillingPlans = async () => {
+    try {
+      const res = await fetch('/api/admin/billing-settings');
+      if (res.ok) {
+        const data = await res.json();
+        setBillingPlans(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch billing plans:', err);
     }
   };
 
@@ -172,7 +189,7 @@ export default function Admin() {
           <p className="text-neutral-500">Manage your platform and community</p>
         </div>
         <div className="flex bg-neutral-100 p-1 rounded-2xl">
-          {(['analytics', 'users', 'businesses'] as const).map((tab) => (
+          {(['analytics', 'users', 'businesses', 'billing'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -504,6 +521,153 @@ export default function Admin() {
                 ))}
               </tbody>
             </table>
+          </motion.div>
+        )}
+
+        {activeTab === 'billing' && (
+          <motion.div
+            key="billing"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-8"
+          >
+            <div className="bg-white p-8 rounded-[2.5rem] border border-neutral-200 shadow-sm">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
+                  <CreditCard size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-neutral-900">Billing Plans & Payment Settings</h3>
+                  <p className="text-sm text-neutral-500">Manage subscription plans and payment links</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                {billingPlans.map((plan) => (
+                  <div key={plan.id} className="p-6 bg-neutral-50 rounded-2xl border border-neutral-200">
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h4 className="text-lg font-bold text-neutral-900">{plan.name}</h4>
+                        <p className="text-sm text-neutral-500">{plan.description}</p>
+                      </div>
+                      <button
+                        onClick={() => setEditingPlan(editingPlan?.id === plan.id ? null : plan)}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700"
+                      >
+                        {editingPlan?.id === plan.id ? 'Cancel' : 'Edit'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <span className="text-neutral-400">Monthly:</span>
+                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.monthly_price?.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-400">Yearly:</span>
+                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.yearly_price?.toLocaleString()}</span>
+                      </div>
+                      <div>
+                        <span className="text-neutral-400">Lifetime:</span>
+                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.lifetime_price?.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    {editingPlan?.id === plan.id && (
+                      <div className="mt-6 pt-6 border-t border-neutral-200 space-y-4">
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Monthly Price (UGX)</label>
+                            <input
+                              type="number"
+                              value={editingPlan.monthly_price}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, monthly_price: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Yearly Price (UGX)</label>
+                            <input
+                              type="number"
+                              value={editingPlan.yearly_price}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, yearly_price: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Lifetime Price (UGX)</label>
+                            <input
+                              type="number"
+                              value={editingPlan.lifetime_price}
+                              onChange={(e) => setEditingPlan({ ...editingPlan, lifetime_price: parseInt(e.target.value) || 0 })}
+                              className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-neutral-400 uppercase mb-1">Description</label>
+                          <input
+                            type="text"
+                            value={editingPlan.description}
+                            onChange={(e) => setEditingPlan({ ...editingPlan, description: e.target.value })}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg"
+                          />
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/admin/billing-plans/${plan.id}`, {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  name: editingPlan.name,
+                                  description: editingPlan.description,
+                                  monthly_price: editingPlan.monthly_price,
+                                  yearly_price: editingPlan.yearly_price,
+                                  lifetime_price: editingPlan.lifetime_price,
+                                  features: editingPlan.features
+                                })
+                              });
+                              if (res.ok) {
+                                alert('Plan updated successfully!');
+                                fetchBillingPlans();
+                                setEditingPlan(null);
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert('Failed to update plan');
+                            }
+                          }}
+                          className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-2"
+                        >
+                          <Save size={18} />
+                          Save Changes
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-8 p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                <h4 className="font-bold text-blue-900 mb-2">💳 Payment Link Instructions</h4>
+                <p className="text-sm text-blue-700 mb-4">
+                  To enable payment collection, configure your payment gateway URL below. 
+                  When users subscribe, they'll receive a payment link to complete their purchase.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    placeholder="Enter your payment gateway URL (e.g., https://pay.stripe.com/...)"
+                    className="flex-1 px-4 py-3 border border-blue-200 rounded-xl"
+                  />
+                  <button className="px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700">
+                    Save Payment URL
+                  </button>
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
