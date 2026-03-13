@@ -40,12 +40,20 @@ export default function App() {
   useEffect(() => {
     const savedCount = localStorage.getItem('unread_notifications');
     if (savedCount) {
-      setUnreadCount(parseInt(savedCount, 10));
+      const count = parseInt(savedCount, 10);
+      if (!isNaN(count)) {
+        setUnreadCount(count);
+      }
     }
   }, []);
 
   // Update badge when unread count changes
   useEffect(() => {
+    // Skip if unreadCount is not a valid number
+    if (typeof unreadCount !== 'number' || unreadCount < 0) {
+      return;
+    }
+    
     if ('setAppBadge' in navigator) {
       if (unreadCount > 0) {
         navigator.setAppBadge(unreadCount).catch(console.error);
