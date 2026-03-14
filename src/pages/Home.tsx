@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users, Star } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
+import { playNotificationAlert } from '../utils/notificationSound';
 import { Item, User, Comment, Business, Message } from '../types';
 import OpenGraphMeta from '../components/OpenGraphMeta';
 import ReviewModal from '../components/ReviewModal';
@@ -81,6 +82,9 @@ export default function Home({ user }: { user: User }) {
 
     socket.on('notification', (data) => {
       if (data.receiver_id === user.id) {
+        // Play vibration and beep sound when notification is received
+        playNotificationAlert();
+        
         const activityId = Date.now();
         // Handle both 'text' and 'body' properties for notification data
         const notificationText = data.text || data.body || 'New notification';

@@ -12,6 +12,7 @@ import AdminPage from './pages/Admin';
 import BusinessPage from './pages/Business';
 import { User as UserType, Business } from './types';
 import socket from './socket';
+import { playNotificationAlert } from './utils/notificationSound';
 
 // VAPID public key - should match server.js
 const VAPID_PUBLIC_KEY = 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco';
@@ -153,6 +154,9 @@ export default function App() {
       // Validate notification data before using
       const title = data?.title || 'Vitu Notification';
       const body = data?.body || data?.text || 'You have a new notification';
+      
+      // Play vibration and beep sound when notification is received (app is open)
+      playNotificationAlert();
       
       if (Notification.permission === "granted") {
         new Notification(title, { body });

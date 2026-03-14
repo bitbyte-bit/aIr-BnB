@@ -36,14 +36,19 @@ self.addEventListener('push', (event) => {
     }
   }
   
+  // Enhanced vibration pattern for more noticeable alerts
   const options = {
     body: data.body,
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/badge-72.png',
     tag: data.tag || 'default',
     data: data.data || {},
-    vibrate: [100, 50, 100],
+    // Vibration pattern: [vibrate, pause, vibrate, pause, vibrate]
+    vibrate: [300, 150, 300, 150, 500],
     requireInteraction: true,
+    // Sound - works on some platforms (Android Chrome)
+    // Note: iOS Safari does not support custom sounds in push notifications
+    sound: 'default',
     actions: [
       { action: 'view', title: 'View' },
       { action: 'dismiss', title: 'Dismiss' }
