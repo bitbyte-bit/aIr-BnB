@@ -1374,12 +1374,16 @@ async function startServer() {
   if (isProduction) {
     app.use(express.static(path.join(__dirname, "dist"), {
       setHeaders: (res, filePath) => {
-        if (filePath.endsWith('.js')) {
-          res.setHeader('Content-Type', 'application/javascript');
+        if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+          res.setHeader('Content-Type', 'text/javascript');
         } else if (filePath.endsWith('.css')) {
           res.setHeader('Content-Type', 'text/css');
         } else if (filePath.endsWith('.json')) {
           res.setHeader('Content-Type', 'application/json');
+        } else if (filePath.endsWith('.html')) {
+          res.setHeader('Content-Type', 'text/html');
+        } else if (filePath.endsWith('.wasm')) {
+          res.setHeader('Content-Type', 'application/wasm');
         }
       }
     }));
