@@ -34,7 +34,15 @@ export default function App() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('unread_notifications');
+      const parsed = saved ? parseInt(saved, 10) : 0;
+      return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+    } catch {
+      return 0;
+    }
+  });
 
   // Load unread count from localStorage on mount
   useEffect(() => {
@@ -142,8 +150,12 @@ export default function App() {
     }
 
     socket.on('notification', (data) => {
+      // Validate notification data before using
+      const title = data?.title || 'Vitu Notification';
+      const body = data?.body || data?.text || 'You have a new notification';
+      
       if (Notification.permission === "granted") {
-        new Notification(data.title, { body: data.body });
+        new Notification(title, { body });
       }
       // Increment unread count and update badge
       setUnreadCount(prev => prev + 1);
@@ -303,7 +315,7 @@ export default function App() {
               <Route
                 path="*"
                 element={
-                  <Layout user={user} business={business} onLogout={handleLogout}>
+                  <Layout user={user} business={business} onLogout={handleLogout} unreadCount={unreadCount} setUnreadCount={setUnreadCount}>
                     <Routes>
                       <Route path="/" element={<HomePage user={user} />} />
                       <Route path="/item/:itemId" element={<HomePage user={user} />} />
@@ -324,7 +336,7 @@ export default function App() {
   );
 }
 
-function Layout({ children, user, business, onLogout }: { children: React.ReactNode; user: UserType; business: Business | null; onLogout: () => void }) {
+function Layout({ children, user, business, onLogout, unreadCount, setUnreadCount }: { children: React.ReactNode; user: UserType; business: Business | null; onLogout: () => void; unreadCount: number; setUnreadCount: (count: number) => void }) {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
 

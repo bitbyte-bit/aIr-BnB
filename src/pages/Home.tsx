@@ -82,7 +82,9 @@ export default function Home({ user }: { user: User }) {
     socket.on('notification', (data) => {
       if (data.receiver_id === user.id) {
         const activityId = Date.now();
-        setLiveActivities(prev => [...prev, { id: activityId, text: data.text, type: data.type || 'notification' }]);
+        // Handle both 'text' and 'body' properties for notification data
+        const notificationText = data.text || data.body || 'New notification';
+        setLiveActivities(prev => [...prev, { id: activityId, text: notificationText, type: data.type || 'notification' }]);
         setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
       }
     });
