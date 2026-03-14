@@ -13,7 +13,7 @@ interface OpenGraphMetaProps {
 export default function OpenGraphMeta({
   title = 'Vitu - Business Showcase',
   description = 'Discover amazing businesses and products on Vitu',
-  image = 'https://picsum.photos/seed/vitu-og/1200/630',
+  image = '/assets/logo.png',
   url,
   type = 'website',
   siteName = 'Vitu',
