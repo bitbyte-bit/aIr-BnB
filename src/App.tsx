@@ -322,17 +322,13 @@ export default function App() {
 
         <AnimatePresence mode="wait">
           <Routes>
-            {!user ? (
-              <Routes>
-                <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
-                <Route path="/verify-email" element={<VerifyEmailPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="*" element={<AuthPage onLogin={handleLogin} />} />
-              </Routes>
-            ) : (
-              <Route
-                path="*"
-                element={
+            <Route path="/auth" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/" replace />} />
+            <Route path="/verify-email" element={!user ? <VerifyEmailPage /> : <Navigate to="/" replace />} />
+            <Route path="/reset-password" element={!user ? <ResetPasswordPage /> : <Navigate to="/" replace />} />
+            <Route
+              path="*"
+              element={
+                user ? (
                   <Layout user={user} business={business} onLogout={handleLogout} unreadCount={unreadCount} setUnreadCount={setUnreadCount}>
                     <Routes>
                       <Route path="/" element={<HomePage user={user} />} />
@@ -345,9 +341,11 @@ export default function App() {
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
                   </Layout>
-                }
-              />
-            )}
+                ) : (
+                  <Navigate to="/auth" replace />
+                )
+              }
+            />
           </Routes>
         </AnimatePresence>
       </div>
