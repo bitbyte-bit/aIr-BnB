@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, Crown, Zap, Star, ExternalLink, Loader2, Camera } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface BillingPlan {
   id: number;
@@ -26,6 +27,7 @@ interface BillingModalProps {
 
 export default function BillingModal({ isOpen, onClose, businessId, businessName, itemCount, totalLikes }: BillingModalProps) {
   const [plans, setPlans] = useState<BillingPlan[]>([]);
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<BillingPlan | null>(null);
   const [selectedDuration, setSelectedDuration] = useState<'monthly' | 'yearly' | 'lifetime'>('monthly');
@@ -79,14 +81,14 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
         const data = await res.json();
         setCurrentSubscription(data);
         setShowProofUpload(true);
-        alert(`Subscription created!\n\nReference Code: ${data.reference_code}\n\nPlease make payment and upload your payment proof image for verification.`);
+        showToast(`Subscription created! Reference Code: ${data.reference_code}. Please make payment and upload your payment proof image for verification.`, 'success');
       } else {
         const err = await res.json();
-        alert(err.error || 'Failed to create subscription');
+        showToast(err.error || 'Failed to create subscription', 'error');
       }
     } catch (err) {
       console.error('Failed to subscribe:', err);
-      alert('Failed to create subscription. Please try again.');
+      showToast('Failed to create subscription. Please try again.', 'error');
     } finally {
       setSubscribing(false);
     }
@@ -103,10 +105,10 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
       });
 
       if (res.ok) {
-        alert('Payment proof uploaded successfully! Your subscription is pending admin approval.');
+        showToast('Payment proof uploaded successfully! Your subscription is pending admin approval.', 'success');
         onClose();
       } else {
-        alert('Failed to upload payment proof');
+        showToast('Failed to upload payment proof', 'error');
       }
     } catch (err) {
       console.error('Failed to upload proof:', err);

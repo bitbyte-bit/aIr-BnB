@@ -5,11 +5,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
 import { playNotificationAlert } from '../utils/notificationSound';
 import { Item, User, Comment, Business, Message } from '../types';
+import { useToast } from '../components/Toast';
 import OpenGraphMeta from '../components/OpenGraphMeta';
 import ReviewModal from '../components/ReviewModal';
 
 export default function Home({ user }: { user: User }) {
   const { itemId } = useParams();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +149,7 @@ export default function Home({ user }: { user: User }) {
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        alert('Link copied to clipboard!');
+        showToast('Link copied to clipboard!', 'success');
       } catch (err) {
         console.error('Error copying link:', err);
       }

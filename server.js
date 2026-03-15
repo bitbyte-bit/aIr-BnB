@@ -9,6 +9,8 @@ import crypto from "node:crypto";
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import webpush from 'web-push';
+import bcrypt from 'bcryptjs';
+import nodemailer from 'nodemailer';
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +29,123 @@ webpush.setVapidDetails(
 );
 
 console.log('Web Push VAPID public key:', vapidKeys.publicKey.substring(0, 20) + '...');
+
+// Email Configuration
+const emailConfig = {
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || ''
+  },
+  from: process.env.SMTP_FROM || 'Vitu <noreply@vitu.app>'
+};
+
+// Create email transporter
+let transporter = null;
+if (emailConfig.auth.user && emailConfig.auth.pass) {
+  transporter = nodemailer.createTransport({
+    host: emailConfig.host,
+    port: emailConfig.port,
+    secure: emailConfig.secure,
+    auth: {
+      user: emailConfig.auth.user,
+      pass: emailConfig.auth.pass
+    }
+  });
+  console.log('Email transporter configured');
+} else {
+  console.log('Email not configured - verification emails will be logged only');
+}
+
+// Function to send verification email
+async function sendVerificationEmail(email, name, token) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const verificationUrl = `${appUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
+  
+  const mailOptions = {
+    from: emailConfig.from,
+    to: email,
+    subject: 'Verify your Vitu account',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #059669;">Welcome to Vitu!</h2>
+        <p>Hi ${name},</p>
+        <p>Thank you for creating an account. Please verify your email address by clicking the button below:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationUrl}" style="background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block;">Verify Email</a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #6b7280;">${verificationUrl}</p>
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">If you didn't create an account, please ignore this email.</p>
+      </div>
+    `
+  };
+
+  if (transporter) {
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`Verification email sent to ${email}`);
+      return true;
+    } catch (error) {
+      console.error('Error sending verification email:', error);
+      return false;
+    }
+  } else {
+    // Log the email content for development
+    console.log('=== VERIFICATION EMAIL (Development Mode) ===');
+    console.log(`To: ${email}`);
+    console.log(`Subject: ${mailOptions.subject}`);
+    console.log(`URL: ${verificationUrl}`);
+    console.log('=============================================');
+    return true;
+  }
+}
+
+// Function to send password reset email
+async function sendPasswordResetEmail(email, name, token) {
+  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const resetUrl = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
+  
+  const mailOptions = {
+    from: emailConfig.from,
+    to: email,
+    subject: 'Reset your Vitu password',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #059669;">Reset Your Password</h2>
+        <p>Hi ${name},</p>
+        <p>We received a request to reset your password. Click the button below to create a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" style="background-color: #059669; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; display: inline-block;">Reset Password</a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p style="word-break: break-all; color: #6b7280;">${resetUrl}</p>
+        <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">This link will expire in 1 hour. If you didn't request a password reset, please ignore this email.</p>
+      </div>
+    `
+  };
+
+  if (transporter) {
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log(`Password reset email sent to ${email}`);
+      return true;
+    } catch (error) {
+      console.error('Error sending password reset email:', error);
+      return false;
+    }
+  } else {
+    // Log the email content for development
+    console.log('=== PASSWORD RESET EMAIL (Development Mode) ===');
+    console.log(`To: ${email}`);
+    console.log(`Subject: ${mailOptions.subject}`);
+    console.log(`URL: ${resetUrl}`);
+    console.log('=================================================');
+    return true;
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -332,6 +451,11 @@ db.exec(`
 
 // Add columns if they don't exist
 try { db.exec("ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'active'"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN verification_expires DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN reset_token TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN reset_expires DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN gallery TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN custom_fields TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN business_id INTEGER REFERENCES businesses(id)"); } catch (e) {}
@@ -460,7 +584,7 @@ async function startServer() {
   });
 
   // Auth Routes
-  app.post("/api/auth/signup", (req, res) => {
+  app.post("/api/auth/signup", async (req, res) => {
     const { email, password, name } = req.body;
     
     // Validate password requirements
@@ -480,34 +604,236 @@ async function startServer() {
     try {
       const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
       const role = userCount === 0 ? 'admin' : 'user';
-      const stmt = db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)");
-      const info = stmt.run(email, password, name, role);
-      res.json({ id: info.lastInsertRowid, email, name, role, status: 'active' });
+      
+      // Hash the password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(password, saltRounds);
+      
+      // Generate verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      const stmt = db.prepare(
+        "INSERT INTO users (email, password, name, role, verification_token, verification_expires) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+      const info = stmt.run(email, hashedPassword, name, role, verificationToken, verificationExpires.toISOString());
+      
+      // Send verification email
+      await sendVerificationEmail(email, name, verificationToken);
+      
+      res.json({ 
+        id: info.lastInsertRowid, 
+        email, 
+        name, 
+        role, 
+        status: 'pending',
+        message: 'Please check your email to verify your account'
+      });
     } catch (err) {
       res.status(400).json({ error: "Email already exists" });
     }
   });
 
-  app.post("/api/auth/login", (req, res) => {
+  app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
-    const user = db.prepare("SELECT * FROM users WHERE email = ? AND password = ?").get(email, password);
-    if (user) {
-      if (user.status === 'suspended' || user.status === 'banned') {
-        return res.status(403).json({ error: `Your account is ${user.status}.` });
-      }
-      const business = db.prepare("SELECT id FROM businesses WHERE owner_id = ?").get(user.id);
-      res.json({ 
-        id: user.id, 
-        email: user.email, 
-        name: user.name, 
-        role: user.role, 
-        bio: user.bio, 
-        profile_picture: user.profile_picture,
-        status: user.status,
-        business_id: business?.id
+    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    
+    if (!user) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+    
+    // Check if email is verified
+    if (!user.is_verified) {
+      return res.status(403).json({ 
+        error: "Please verify your email before logging in",
+        needsVerification: true,
+        email: user.email
       });
-    } else {
-      res.status(401).json({ error: "Invalid credentials" });
+    }
+    
+    if (user.status === 'suspended' || user.status === 'banned') {
+      return res.status(403).json({ error: `Your account is ${user.status}.` });
+    }
+    
+    const business = db.prepare("SELECT id FROM businesses WHERE owner_id = ?").get(user.id);
+    res.json({ 
+      id: user.id, 
+      email: user.email, 
+      name: user.name, 
+      role: user.role, 
+      bio: user.bio, 
+      profile_picture: user.profile_picture,
+      status: user.status,
+      business_id: business?.id
+    });
+  });
+
+  // Email verification endpoint
+  app.post("/api/auth/verify-email", (req, res) => {
+    const { token, email } = req.body;
+    
+    if (!token || !email) {
+      return res.status(400).json({ error: "Missing token or email" });
+    }
+    
+    try {
+      const user = db.prepare(
+        "SELECT * FROM users WHERE email = ? AND verification_token = ?"
+      ).get(email, token);
+      
+      if (!user) {
+        return res.status(400).json({ error: "Invalid verification token" });
+      }
+      
+      // Check if token is expired
+      if (user.verification_expires && new Date(user.verification_expires) < new Date()) {
+        return res.status(400).json({ error: "Verification token has expired" });
+      }
+      
+      // Check if already verified
+      if (user.is_verified) {
+        return res.json({ message: "Email already verified", success: true });
+      }
+      
+      // Update user as verified
+      db.prepare(
+        "UPDATE users SET is_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?"
+      ).run(user.id);
+      
+      res.json({ message: "Email verified successfully", success: true });
+    } catch (err) {
+      console.error("Verification error:", err);
+      res.status(500).json({ error: "Verification failed" });
+    }
+  });
+
+  // Resend verification email
+  app.post("/api/auth/resend-verification", async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    
+    try {
+      const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      
+      if (user.is_verified) {
+        return res.status(400).json({ error: "Email already verified" });
+      }
+      
+      // Generate new verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      db.prepare(
+        "UPDATE users SET verification_token = ?, verification_expires = ? WHERE id = ?"
+      ).run(verificationToken, verificationExpires.toISOString(), user.id);
+      
+      // Send verification email
+      await sendVerificationEmail(email, user.name, verificationToken);
+      
+      res.json({ message: "Verification email sent" });
+    } catch (err) {
+      console.error("Resend verification error:", err);
+      res.status(500).json({ error: "Failed to resend verification email" });
+    }
+  });
+
+  // Forgot password - send reset email
+  app.post("/api/auth/forgot-password", async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    
+    try {
+      const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      
+      // Always return success to prevent email enumeration
+      if (!user) {
+        return res.json({ message: "If an account exists with this email, a password reset link will be sent" });
+      }
+      
+      // Generate reset token
+      const resetToken = crypto.randomBytes(32).toString('hex');
+      const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      
+      db.prepare(
+        "UPDATE users SET reset_token = ?, reset_expires = ? WHERE id = ?"
+      ).run(resetToken, resetExpires.toISOString(), user.id);
+      
+      // Send password reset email
+      await sendPasswordResetEmail(email, user.name, resetToken);
+      
+      res.json({ message: "If an account exists with this email, a password reset link will be sent" });
+    } catch (err) {
+      console.error("Forgot password error:", err);
+      res.status(500).json({ error: "Failed to process request" });
+    }
+  });
+
+  // Reset password with token
+  app.post("/api/auth/reset-password", async (req, res) => {
+    const { token, email, newPassword } = req.body;
+    
+    if (!token || !email || !newPassword) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+    
+    // Validate password requirements
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+    if (!/[A-Z]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one uppercase letter" });
+    }
+    if (!/[a-z]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one lowercase letter" });
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: "Password must contain at least one numeric character" });
+    }
+    
+    try {
+      const user = db.prepare(
+        "SELECT * FROM users WHERE email = ? AND reset_token = ?"
+      ).get(email, token);
+      
+      if (!user) {
+        return res.status(400).json({ error: "Invalid reset token" });
+      }
+      
+      // Check if token is expired
+      if (user.reset_expires && new Date(user.reset_expires) < new Date()) {
+        return res.status(400).json({ error: "Reset token has expired" });
+      }
+      
+      // Hash new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+      
+      // Update password and clear reset token
+      db.prepare(
+        "UPDATE users SET password = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?"
+      ).run(hashedPassword, user.id);
+      
+      res.json({ message: "Password reset successfully" });
+    } catch (err) {
+      console.error("Reset password error:", err);
+      res.status(500).json({ error: "Failed to reset password" });
     }
   });
 
@@ -524,7 +850,7 @@ async function startServer() {
     res.json({ success: true });
   });
 
-  app.put("/api/profile/:id/password", (req, res) => {
+  app.put("/api/profile/:id/password", async (req, res) => {
     const { currentPassword, newPassword } = req.body;
     const userId = parseInt(req.params.id);
     
@@ -550,13 +876,19 @@ async function startServer() {
         return res.status(404).json({ error: "User not found" });
       }
       
-      // For simplicity, we're comparing directly. In production, use bcrypt
-      if (user.password !== currentPassword) {
+      // Compare current password with stored hash
+      const isValidPassword = await bcrypt.compare(currentPassword, user.password);
+      
+      if (!isValidPassword) {
         return res.status(400).json({ error: "Current password is incorrect" });
       }
       
+      // Hash new password
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+      
       // Update password
-      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(newPassword, userId);
+      db.prepare("UPDATE users SET password = ? WHERE id = ?").run(hashedPassword, userId);
       
       res.json({ success: true });
     } catch (err) {
@@ -800,12 +1132,16 @@ async function startServer() {
     
     io.emit("engagement", { itemId, type: 'comment', comment: newComment, userName });
     
-    const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
-    io.emit("notification", {
-      type: 'comment',
-      title: 'New Comment!',
-      body: `${userName} commented on ${item.title}`
-    });
+    const item = db.prepare("SELECT title, user_id FROM items WHERE id = ?").get(itemId);
+    // Send notification only to the item owner
+    if (item && item.user_id) {
+      io.to(`user_${item.user_id}`).emit("notification", {
+        type: 'comment',
+        title: 'New Comment!',
+        body: `${userName} commented on ${item.title}`,
+        receiver_id: item.user_id
+      });
+    }
 
     res.json(newComment);
   });
@@ -827,12 +1163,16 @@ async function startServer() {
       const likeCount = db.prepare("SELECT COUNT(*) as count FROM likes WHERE item_id = ?").get(itemId);
       io.emit("engagement", { itemId, type: 'like', count: likeCount.count, userName: user?.name || 'Someone' });
       
-      const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
-      io.emit("notification", {
-        type: 'like',
-        title: 'New Like!',
-        body: `Someone liked your item: ${item.title}`
-      });
+      // Get item owner and send notification only to them
+      const item = db.prepare("SELECT title, user_id FROM items WHERE id = ?").get(itemId);
+      if (item && item.user_id) {
+        io.to(`user_${item.user_id}`).emit("notification", {
+          type: 'like',
+          title: 'New Like!',
+          body: `Someone liked your item: ${item.title}`,
+          receiver_id: item.user_id
+        });
+      }
       
       res.json({ success: true });
     } catch (err) {
@@ -909,13 +1249,16 @@ async function startServer() {
         "SELECT reviews.*, users.profile_picture as user_avatar FROM reviews LEFT JOIN users ON reviews.user_id = users.id WHERE reviews.id = ?"
       ).get(info.lastInsertRowid);
       
-      // Emit notification
-      const item = db.prepare("SELECT title FROM items WHERE id = ?").get(itemId);
-      io.emit("notification", {
-        type: 'review',
-        title: 'New Review!',
-        body: `${userName} reviewed ${item.title}`
-      });
+      // Emit notification only to the item owner
+      const item = db.prepare("SELECT title, user_id FROM items WHERE id = ?").get(itemId);
+      if (item && item.user_id) {
+        io.to(`user_${item.user_id}`).emit("notification", {
+          type: 'review',
+          title: 'New Review!',
+          body: `${userName} reviewed ${item.title}`,
+          receiver_id: item.user_id
+        });
+      }
       
       res.json(newReview);
     } catch (err) {
@@ -1131,6 +1474,21 @@ async function startServer() {
     res.json(users);
   });
 
+  // Get all users (for inbox/chat)
+  app.get("/api/users/all", (req, res) => {
+    try {
+      const users = db.prepare(`
+        SELECT id, email, name, role, status, bio, profile_picture, created_at
+        FROM users
+        WHERE status = 'active'
+        ORDER BY name ASC
+      `).all();
+      res.json(users);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Get detailed user information for admin
   app.get("/api/admin/users/:id/details", (req, res) => {
     try {
@@ -1240,7 +1598,11 @@ async function startServer() {
     const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
     db.prepare("INSERT INTO messages (id, sender_id, receiver_id, text, attachment) VALUES (?, ?, ?, ?, ?)").run(id, sender_id, receiver_id, text, attachment);
     const newMessage = db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
-    io.emit("message", newMessage);
+    
+    // Send message only to the specific sender and receiver
+    io.to(`user_${sender_id}`).emit("message", newMessage);
+    io.to(`user_${receiver_id}`).emit("message", newMessage);
+    
     res.json(newMessage);
   });
 
@@ -1286,7 +1648,8 @@ async function startServer() {
         const msgId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
         const notificationText = `New follower! A user has started following ${business.name}.`;
         db.prepare("INSERT INTO messages (id, sender_id, receiver_id, text) VALUES (?, ?, ?, ?)").run(msgId, vitu.id, business.owner_id, notificationText);
-        io.emit('notification', { receiver_id: business.owner_id, text: notificationText, type: 'follow' });
+        // Send notification only to the business owner
+        io.to(`user_${business.owner_id}`).emit('notification', { receiver_id: business.owner_id, text: notificationText, type: 'follow' });
       }
 
       res.json({ success: true });
@@ -1404,8 +1767,30 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
 
+  // Track connected users: Map<socketId, userId>
+  const userSockets = new Map();
+  
   io.on("connection", (socket) => {
-    console.log("A user connected");
+    console.log("A user connected:", socket.id);
+    
+    // Handle user joining with their user ID
+    socket.on("join", (userId) => {
+      if (userId) {
+        userSockets.set(socket.id, userId);
+        socket.join(`user_${userId}`);
+        console.log(`User ${userId} joined room: user_${userId}`);
+      }
+    });
+    
+    // Handle disconnect
+    socket.on("disconnect", () => {
+      const userId = userSockets.get(socket.id);
+      if (userId) {
+        console.log(`User ${userId} disconnected`);
+        userSockets.delete(socket.id);
+      }
+      console.log("A user disconnected");
+    });
   });
 }
 

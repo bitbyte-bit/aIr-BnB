@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, Camera, Loader2, Plus, Trash2 } from 'lucide-react';
+import { useToast } from './Toast';
 
 interface Item {
   id: string;
@@ -20,6 +21,7 @@ interface EditItemModalProps {
 
 export default function EditItemModal({ isOpen, onClose, item, onSave }: EditItemModalProps) {
   const [title, setTitle] = useState(item?.title || '');
+  const { showToast } = useToast();
   const [description, setDescription] = useState(item?.description || '');
   const [imageUrl, setImageUrl] = useState(item?.image_url || '');
   const [gallery, setGallery] = useState<string[]>([]);
@@ -88,11 +90,11 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
         onSave(updatedItem);
         onClose();
       } else {
-        alert('Failed to update item');
+        showToast('Failed to update item', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to update item');
+      showToast('Failed to update item', 'error');
     } finally {
       setLoading(false);
     }

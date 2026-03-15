@@ -6,9 +6,11 @@ import { User, Business, Message, SocialHandle } from '../types';
 import ProfileCodes from '../components/ProfileCodes';
 import BillingModal from '../components/BillingModal';
 import EditItemModal from '../components/EditItemModal';
+import { useToast } from '../components/Toast';
 
 export default function BusinessPage({ user, business, onUpdate }: { user: User; business: Business | null; onUpdate: () => void }) {
   const [name, setName] = useState(business?.name || '');
+  const { showToast } = useToast();
   const [description, setDescription] = useState(business?.description || '');
   const [logo, setLogo] = useState(business?.logo || '');
   const [address, setAddress] = useState(business?.address || '');
@@ -161,7 +163,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       if (res.ok) {
         setReplyText('');
         setReplyingTo(null);
-        alert('Reply sent!');
+        showToast('Reply sent!', 'success');
       }
     } catch (err) {
       console.error('Failed to send reply:', err);
@@ -193,10 +195,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       if (res.ok) {
         onUpdate();
         setIsEditingProfile(false);
-        if (business) alert('Business profile updated!');
+        if (business) showToast('Business profile updated!', 'success');
       } else {
         const data = await res.json();
-        alert(data.error);
+        showToast(data.error || 'Failed to update business', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -226,10 +228,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         }),
       });
 
-      alert('Approval request sent to the master admin!');
+      showToast('Approval request sent to the master admin!', 'success');
     } catch (err) {
       console.error(err);
-      alert('Failed to send request. Please try again later.');
+      showToast('Failed to send request. Please try again later.', 'error');
     } finally {
       setRequestingApproval(false);
     }
@@ -239,7 +241,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     e.preventDefault();
     if (!business) return;
     if (!newItem.image_url) {
-      alert('Please upload an image for the item');
+      showToast('Please upload an image for the item', 'error');
       return;
     }
     setLoading(true);
@@ -256,7 +258,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       });
       if (res.ok) {
         setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [] });
-        alert('Item posted successfully!');
+        showToast('Item posted successfully!', 'success');
         fetchAnalytics();
         fetchBusinessItems();
       }

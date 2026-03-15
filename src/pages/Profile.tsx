@@ -7,10 +7,12 @@ import { Plus, Trash2 } from 'lucide-react';
 import OpenGraphMeta from '../components/OpenGraphMeta';
 import ProfileCodes from '../components/ProfileCodes';
 import PasswordChangeModal from '../components/PasswordChangeModal';
+import { useToast } from '../components/Toast';
 
 export default function Profile({ user: currentUser, onUpdate }: { user: User; onUpdate: (user: User) => void }) {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const isOwnProfile = !userId || userId === String(currentUser.id);
   
   const [targetUser, setTargetUser] = useState<User | null>(isOwnProfile ? currentUser : null);
@@ -165,7 +167,7 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
 
       if (userRes.ok) {
         onUpdate({ ...currentUser, name, bio, profile_picture: profilePicture });
-        alert('Profile updated successfully!');
+        showToast('Profile updated successfully!', 'success');
       }
     } catch (err) {
       console.error(err);

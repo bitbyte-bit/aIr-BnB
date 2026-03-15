@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import HomePage from './pages/Home';
 import AuthPage from './pages/Auth';
+import VerifyEmailPage from './pages/VerifyEmail';
+import ResetPasswordPage from './pages/ResetPassword';
 import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
 import BusinessPage from './pages/Business';
+import InboxPage from './pages/Inbox';
+import { ToastProvider } from './components/Toast';
 import { User as UserType, Business } from './types';
 import socket from './socket';
 import { playNotificationAlert } from './utils/notificationSound';
@@ -108,7 +112,6 @@ export default function App() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
       // If no deferredPrompt (e.g. iOS), we could show instructions
-      alert('To install: tap the share button and "Add to Home Screen"');
       return;
     }
     deferredPrompt.prompt();
@@ -122,6 +125,9 @@ export default function App() {
 
   useEffect(() => {
     if (user) {
+      // Join user's notification room
+      socket.emit('join', user.id);
+      
       fetchBusiness();
       setupNotifications();
     }
@@ -225,6 +231,8 @@ export default function App() {
   const handleLogin = (userData: UserType) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
+    // Join user to their notification room
+    socket.emit('join', userData.id);
     // Register for push notifications after login
     registerPushNotifications(userData.id);
   };
@@ -237,7 +245,8 @@ export default function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
+      <ToastProvider>
+        <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
         <AnimatePresence>
           {showInstallBanner && (
             <motion.div
@@ -314,7 +323,12 @@ export default function App() {
         <AnimatePresence mode="wait">
           <Routes>
             {!user ? (
-              <Route path="*" element={<AuthPage onLogin={handleLogin} />} />
+              <Routes>
+                <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
+                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="*" element={<AuthPage onLogin={handleLogin} />} />
+              </Routes>
             ) : (
               <Route
                 path="*"
@@ -326,6 +340,7 @@ export default function App() {
                       <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
                       <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
                       <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
+                      <Route path="/inbox" element={<InboxPage user={user} />} />
                       {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
                       <Route path="*" element={<Navigate to="/" replace />} />
                     </Routes>
@@ -336,6 +351,7 @@ export default function App() {
           </Routes>
         </AnimatePresence>
       </div>
+      </ToastProvider>
     </Router>
   );
 }
@@ -347,6 +363,7 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
     { label: 'Profile', icon: User, path: '/profile' },
+    { label: 'Inbox', icon: MessageSquare, path: '/inbox' },
     { label: business ? 'My Business' : 'Register Business', icon: Briefcase, path: '/business' },
     ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
   ];

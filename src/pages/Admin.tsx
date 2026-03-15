@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save, Eye, Mail, Phone, Calendar, BarChart2, MessageCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
+import { useToast } from '../components/Toast';
 
 interface UserDetails {
   id: number;
@@ -29,6 +30,7 @@ interface UserDetails {
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions'>('analytics');
+  const { showToast } = useToast();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -103,7 +105,7 @@ export default function Admin() {
         body: JSON.stringify({ status })
       });
       if (res.ok) {
-        alert(`Subscription ${status} successfully!`);
+        showToast(`Subscription ${status} successfully!`, 'success');
         fetchPendingSubscriptions();
       }
     } catch (err) {
@@ -131,7 +133,7 @@ export default function Admin() {
       setSelectedUser(data);
     } catch (err) {
       console.error('Error fetching user details:', err);
-      alert('Failed to fetch user details');
+      showToast('Failed to fetch user details', 'error');
     } finally {
       setUserDetailsLoading(false);
     }
@@ -162,7 +164,7 @@ export default function Admin() {
       });
       if (res.ok) {
         setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [] });
-        alert('Item posted successfully!');
+        showToast('Item posted successfully!', 'success');
         fetchAnalytics();
       }
     } catch (err) {
@@ -747,13 +749,13 @@ export default function Admin() {
                                 })
                               });
                               if (res.ok) {
-                                alert('Plan updated successfully!');
+                                showToast('Plan updated successfully!', 'success');
                                 fetchBillingPlans();
                                 setEditingPlan(null);
                               }
                             } catch (err) {
                               console.error(err);
-                              alert('Failed to update plan');
+                              showToast('Failed to update plan', 'error');
                             }
                           }}
                           className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-2"
