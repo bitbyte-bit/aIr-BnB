@@ -1,0 +1,184 @@
+{
+  "appDetails": {
+    "defaultLanguage": "en",
+    "title": "Vitu - Business Showcase",
+    "shortDescription": "Discover and connect with amazing businesses. Showcase your products and services to a wider audience.",
+    "fullDescription": "Vitu is the ultimate business showcase platform that connects businesses with customers in a whole new way.\n\n🚀 KEY FEATURES:\n\n• Business Profiles: Create stunning business profiles with logos, descriptions, and contact information\n• Product Showcase: Post and showcase your products or services with images and detailed descriptions\n• Real-time Engagement: Connect with customers through likes, comments, and shares\n• Reviews & Ratings: Build trust with authentic customer reviews and ratings\n• Direct Messaging: Communicate directly with businesses and customers\n• Follow System: Stay updated with your favorite businesses\n• Analytics Dashboard: Track your business performance with detailed insights\n• Push Notifications: Never miss an important update or message\n• Admin Dashboard: Comprehensive tools for managing the platform\n\n💼 FOR BUSINESSES:\n• Easy registration and approval process\n• Showcase unlimited products and services\n• Build a loyal customer base\n• Track engagement and performance metrics\n• Manage subscriptions and billing\n\n👥 FOR CUSTOMERS:\n• Discover local and online businesses\n• Browse products and services\n• Read authentic reviews\n• Connect directly with businesses\n• Save favorites and get updates\n\n🔒 SECURITY & PRIVACY:\n• Secure user authentication\n• Email verification\n• Password encryption\n• Privacy-focused design\n\n📱 PWA FEATURES:\n• Install as a native app\n• Offline support\n• Push notifications\n• Fast and responsive\n\nVitu is perfect for:\n• Retailers\n• Service providers\n• Restaurants and food delivery\n• Motor spare parts\n• Repair services\n• Transport services\n• And many more!\n\nJoin thousands of businesses already growing on Vitu. Download now and start showcasing your business to the world!",
+    "video": "",
+    "category": "BUSINESS",
+    "contentRating": "Everyone",
+    "contactEmail": "support@vitu.app",
+    "contactPhone": "",
+    "contactWebsite": "https://vitu.app",
+    "privacyPolicyUrl": "https://vitu.app/privacy",
+    "termsOfServiceUrl": "https://vitu.app/terms"
+  },
+  "localizedDetails": {
+    "en-US": {
+      "title": "Vitu - Business Showcase",
+      "shortDescription": "Discover and connect with amazing businesses. Showcase your products and services to a wider audience.",
+      "fullDescription": "Vitu is the ultimate business showcase platform that connects businesses with customers in a whole new way.\n\n🚀 KEY FEATURES:\n\n• Business Profiles: Create stunning business profiles with logos, descriptions, and contact information\n• Product Showcase: Post and showcase your products or services with images and detailed descriptions\n• Real-time Engagement: Connect with customers through likes, comments, and shares\n• Reviews & Ratings: Build trust with authentic customer reviews and ratings\n• Direct Messaging: Communicate directly with businesses and customers\n• Follow System: Stay updated with your favorite businesses\n• Analytics Dashboard: Track your business performance with detailed insights\n• Push Notifications: Never miss an important update or message\n• Admin Dashboard: Comprehensive tools for managing the platform\n\n💼 FOR BUSINESSES:\n• Easy registration and approval process\n• Showcase unlimited products and services\n• Build a loyal customer base\n• Track engagement and performance metrics\n• Manage subscriptions and billing\n\n👥 FOR CUSTOMERS:\n• Discover local and online businesses\n• Browse products and services\n• Read authentic reviews\n• Connect directly with businesses\n• Save favorites and get updates\n\n🔒 SECURITY & PRIVACY:\n• Secure user authentication\n• Email verification\n• Password encryption\n• Privacy-focused design\n\n📱 PWA FEATURES:\n• Install as a native app\n• Offline support\n• Push notifications\n• Fast and responsive\n\nVitu is perfect for:\n• Retailers\n• Service providers\n• Restaurants and food delivery\n• Motor spare parts\n• Repair services\n• Transport services\n• And many more!\n\nJoin thousands of businesses already growing on Vitu. Download now and start showcasing your business to the world!"
+    }
+  },
+  "screenshots": {
+    "phone": [
+      {
+        "url": "screenshots/phone-1.png",
+        "caption": "Home feed with business listings"
+      },
+      {
+        "url": "screenshots/phone-2.png",
+        "caption": "Business profile page"
+      },
+      {
+        "url": "screenshots/phone-3.png",
+        "caption": "Product showcase with reviews"
+      },
+      {
+        "url": "screenshots/phone-4.png",
+        "caption": "Real-time messaging"
+      },
+      {
+        "url": "screenshots/phone-5.png",
+        "caption": "Analytics dashboard"
+      }
+    ],
+    "tablet7": [
+      {
+        "url": "screenshots/tablet7-1.png",
+        "caption": "Home feed on tablet"
+      },
+      {
+        "url": "screenshots/tablet7-2.png",
+        "caption": "Business profile on tablet"
+      }
+    ],
+    "tablet10": [
+      {
+        "url": "screenshots/tablet10-1.png",
+        "caption": "Home feed on large tablet"
+      },
+      {
+        "url": "screenshots/tablet10-2.png",
+        "caption": "Business profile on large tablet"
+      }
+    ]
+  },
+  "featureGraphic": {
+    "url": "feature-graphic.png",
+    "dimensions": {
+      "width": 1024,
+      "height": 500
+    }
+  },
+  "appIcon": {
+    "url": "icon-512.png",
+    "dimensions": {
+      "width": 512,
+      "height": 512
+    }
+  },
+  "promoGraphic": {
+    "url": "promo-graphic.png",
+    "dimensions": {
+      "width": 180,
+      "height": 120
+    }
+  },
+  "tvBanner": {
+    "url": "tv-banner.png",
+    "dimensions": {
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "contentRating": {
+    "rating": "Everyone",
+    "interactiveElements": "Users Interact, Shares Info, Digital Purchases",
+    "contentDescriptors": []
+  },
+  "pricing": {
+    "type": "Free",
+    "price": "0",
+    "currency": "USD"
+  },
+  "distribution": {
+    "countries": ["US", "CA", "GB", "AU", "IN", "DE", "FR", "BR", "MX", "JP"],
+    "androidVersion": {
+      "min": 5.0,
+      "target": 14
+    },
+    "deviceCategories": ["phone", "tablet"],
+    "contentRating": "Everyone"
+  },
+  "storeListing": {
+    "title": "Vitu - Business Showcase",
+    "shortDescription": "Discover and connect with amazing businesses. Showcase your products and services to a wider audience.",
+    "fullDescription": "Vitu is the ultimate business showcase platform that connects businesses with customers in a whole new way.\n\n🚀 KEY FEATURES:\n\n• Business Profiles: Create stunning business profiles with logos, descriptions, and contact information\n• Product Showcase: Post and showcase your products or services with images and detailed descriptions\n• Real-time Engagement: Connect with customers through likes, comments, and shares\n• Reviews & Ratings: Build trust with authentic customer reviews and ratings\n• Direct Messaging: Communicate directly with businesses and customers\n• Follow System: Stay updated with your favorite businesses\n• Analytics Dashboard: Track your business performance with detailed insights\n• Push Notifications: Never miss an important update or message\n• Admin Dashboard: Comprehensive tools for managing the platform\n\n💼 FOR BUSINESSES:\n• Easy registration and approval process\n• Showcase unlimited products and services\n• Build a loyal customer base\n• Track engagement and performance metrics\n• Manage subscriptions and billing\n\n👥 FOR CUSTOMERS:\n• Discover local and online businesses\n• Browse products and services\n• Read authentic reviews\n• Connect directly with businesses\n• Save favorites and get updates\n\n🔒 SECURITY & PRIVACY:\n• Secure user authentication\n• Email verification\n• Password encryption\n• Privacy-focused design\n\n📱 PWA FEATURES:\n• Install as a native app\n• Offline support\n• Push notifications\n• Fast and responsive\n\nVitu is perfect for:\n• Retailers\n• Service providers\n• Restaurants and food delivery\n• Motor spare parts\n• Repair services\n• Transport services\n• And many more!\n\nJoin thousands of businesses already growing on Vitu. Download now and start showcasing your business to the world!",
+    "video": ""
+  },
+  "requirements": {
+    "screenshots": {
+      "phone": {
+        "min": 2,
+        "max": 8,
+        "dimensions": {
+          "minWidth": 1080,
+          "maxWidth": 3840,
+          "minHeight": 1920,
+          "maxHeight": 7680
+        }
+      },
+      "tablet7": {
+        "min": 1,
+        "max": 8,
+        "dimensions": {
+          "minWidth": 1200,
+          "maxWidth": 3840,
+          "minHeight": 1920,
+          "maxHeight": 7680
+        }
+      },
+      "tablet10": {
+        "min": 1,
+        "max": 8,
+        "dimensions": {
+          "minWidth": 1200,
+          "maxWidth": 3840,
+          "minHeight": 1920,
+          "maxHeight": 7680
+        }
+      }
+    },
+    "featureGraphic": {
+      "dimensions": {
+        "width": 1024,
+        "height": 500
+      }
+    },
+    "appIcon": {
+      "dimensions": {
+        "width": 512,
+        "height": 512
+      }
+    },
+    "promoGraphic": {
+      "dimensions": {
+        "width": 180,
+        "height": 120
+      }
+    }
+  },
+  "checklist": {
+    "privacyPolicy": true,
+    "termsOfService": true,
+    "contentRating": true,
+    "appIcon512": false,
+    "featureGraphic": false,
+    "screenshotsPhone": false,
+    "screenshotsTablet7": false,
+    "screenshotsTablet10": false,
+    "promoGraphic": false,
+    "tvBanner": false
+  }
+}

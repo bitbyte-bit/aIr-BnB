@@ -72,7 +72,7 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          planId: selectedPlan.id,
+          planId: selectedPlan?.id,
           duration: selectedDuration
         })
       });
@@ -98,7 +98,7 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
     if (!currentSubscription || !paymentProof) return;
     setUploadingProof(true);
     try {
-      const res = await fetch(`/api/subscriptions/${currentSubscription.id}/payment-proof`, {
+      const res = await fetch(`/api/subscriptions/${currentSubscription?.id}/payment-proof`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_proof_image: paymentProof })

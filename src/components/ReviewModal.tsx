@@ -11,6 +11,11 @@ interface ReviewModalProps {
 }
 
 export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModalProps) {
+  // Guard against null user
+  if (!user) {
+    return null;
+  }
+
   const [reviews, setReviews] = useState<Review[]>([]);
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
@@ -30,7 +35,7 @@ export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModal
     if (!item) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/items/${item.id}/reviews?userId=${user.id}`);
+      const res = await fetch(`/api/items/${item.id}/reviews?userId=${user?.id}`);
       if (res.ok) {
         const data = await res.json();
         setReviews(data.reviews);
@@ -38,7 +43,7 @@ export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModal
         setTotalReviews(data.total_reviews);
         
         // Check if current user has already reviewed
-        const userReview = data.reviews.find((r: Review) => r.user_id === user.id);
+        const userReview = data.reviews.find((r: Review) => r.user_id === user?.id);
         if (userReview) {
           setExistingReview(userReview);
           setUserRating(userReview.rating);
@@ -62,8 +67,8 @@ export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModal
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: user.id,
-          userName: user.name,
+          userId: user?.id,
+          userName: user?.name,
           rating: userRating,
           text: reviewText
         })

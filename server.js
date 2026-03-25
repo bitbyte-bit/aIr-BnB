@@ -1715,12 +1715,69 @@ async function startServer() {
     process.exit(1);
   }
 
-  // Serve static files from dist folder with explicit MIME types
+  // Serve static files from dist folder with proper MIME types
   if (isProduction) {
-    app.use(express.static(path.join(__dirname, "dist"), {
+    const distPath = path.join(__dirname, "dist");
+    
+    // FIRST: Serve admin assets (BEFORE main app to prevent conflicts)
+    const adminDistPath = path.join(__dirname, "dist-admin");
+    if (fs.existsSync(adminDistPath)) {
+      // Serve admin static files under /admin/assets
+      app.use("/admin/assets", express.static(adminDistPath, {
+        maxAge: '1y',
+        etag: true,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+            res.setHeader('Content-Type', 'application/javascript');
+          } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+          } else if (filePath.endsWith('.json')) {
+            res.setHeader('Content-Type', 'application/json');
+          } else if (filePath.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html');
+          }
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
+      }));
+      
+      // Also serve admin assets at /assets path for admin index.html references
+      app.use("/assets", express.static(adminDistPath, {
+        maxAge: '1y',
+        etag: true,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+            res.setHeader('Content-Type', 'application/javascript');
+          } else if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+          } else if (filePath.endsWith('.json')) {
+            res.setHeader('Content-Type', 'application/json');
+          } else if (filePath.endsWith('.png')) {
+            res.setHeader('Content-Type', 'image/png');
+          }
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+        }
+      }));
+      
+      // Admin SPA fallback - explicit routes plus wildcard
+      app.get("/admin", (req, res) => {
+        res.sendFile(path.join(adminDistPath, "index.html"));
+      });
+      app.get("/admin/", (req, res) => {
+        res.sendFile(path.join(adminDistPath, "index.html"));
+      });
+      app.get("/admin/*", (req, res) => {
+        res.sendFile(path.join(adminDistPath, "index.html"));
+      });
+    }
+
+    // SECOND: Serve main app
+    app.use(express.static(distPath, {
+      maxAge: '1y',
+      etag: true,
       setHeaders: (res, filePath) => {
+        // Ensure proper MIME type and security headers for all files
         if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
-          res.setHeader('Content-Type', 'text/javascript');
+          res.setHeader('Content-Type', 'application/javascript');
         } else if (filePath.endsWith('.css')) {
           res.setHeader('Content-Type', 'text/css');
         } else if (filePath.endsWith('.json')) {
@@ -1729,10 +1786,18 @@ async function startServer() {
           res.setHeader('Content-Type', 'text/html');
         } else if (filePath.endsWith('.wasm')) {
           res.setHeader('Content-Type', 'application/wasm');
+        } else if (filePath.endsWith('.png')) {
+          res.setHeader('Content-Type', 'image/png');
+        } else if (filePath.endsWith('.svg')) {
+          res.setHeader('Content-Type', 'image/svg+xml');
         }
+        // Add security header to prevent MIME type sniffing
+        res.setHeader('X-Content-Type-Options', 'nosniff');
       }
     }));
-    app.get("*", (req, res) => {
+
+    // Main app SPA fallback - only serve index.html for root path
+    app.get("/", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   } else {

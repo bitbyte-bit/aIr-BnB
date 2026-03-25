@@ -1,15 +1,19 @@
 {
-  "name": "react-example",
+  "name": "vitu",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "node server.js",
     "start": "set NODE_ENV=production&& node server.js",
     "build": "vite build",
+    "build:admin": "cd admin && npm install && npm run build",
+    "build:all": "npm run build && npm run build:admin",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "generate-icons": "node scripts/generate-icons.js",
+    "prepare-pwa": "npm run generate-icons && npm run build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -40,6 +44,7 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^7.0.11",
     "autoprefixer": "^10.4.21",
+    "sharp": "^0.33.2",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

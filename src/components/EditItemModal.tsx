@@ -73,7 +73,7 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
     
     setLoading(true);
     try {
-      const res = await fetch(`/api/items/${item.id}`, {
+      const res = await fetch(`/api/items/${item?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

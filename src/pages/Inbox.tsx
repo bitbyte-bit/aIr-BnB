@@ -9,6 +9,11 @@ interface InboxProps {
 }
 
 export default function Inbox({ user }: InboxProps) {
+  // Guard against null user
+  if (!user) {
+    return null;
+  }
+
   const [users, setUsers] = useState<UserType[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,8 +35,8 @@ export default function Inbox({ user }: InboxProps) {
       // Listen for new messages
       socket.on('message', (msg: Message) => {
         if (
-          (msg.sender_id === selectedUser.id && msg.receiver_id === user.id) ||
-          (msg.sender_id === user.id && msg.receiver_id === selectedUser.id)
+          (msg.sender_id === selectedUser.id && msg.receiver_id === user?.id) ||
+          (msg.sender_id === user?.id && msg.receiver_id === selectedUser.id)
         ) {
           setMessages(prev => [...prev, msg]);
         }
@@ -41,7 +46,7 @@ export default function Inbox({ user }: InboxProps) {
         socket.off('message');
       };
     }
-  }, [selectedUser, user.id]);
+  }, [selectedUser, user?.id]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -54,7 +59,7 @@ export default function Inbox({ user }: InboxProps) {
       if (res.ok) {
         const data = await res.json();
         // Filter out current user
-        setUsers(data.filter((u: UserType) => u.id !== user.id));
+        setUsers(data.filter((u: UserType) => u.id !== user?.id));
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -63,7 +68,7 @@ export default function Inbox({ user }: InboxProps) {
 
   const fetchMessages = async (otherUserId: number) => {
     try {
-      const res = await fetch(`/api/messages/${otherUserId}?userId=${user.id}`);
+      const res = await fetch(`/api/messages/${otherUserId}?userId=${user?.id}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -82,7 +87,7 @@ export default function Inbox({ user }: InboxProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user.id,
+          sender_id: user?.id,
           receiver_id: selectedUser.id,
           text: newMessage.trim()
         })

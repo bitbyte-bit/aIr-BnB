@@ -90,7 +90,7 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
   };
 
   const fetchBusiness = async () => {
-    const id = isOwnProfile ? currentUser.id : userId;
+    const id = isOwnProfile ? currentUser?.id : userId;
     try {
       const res = await fetch(`/api/businesses/my/${id}`);
       const data = await res.json();
@@ -134,7 +134,7 @@ export default function Profile({ user: currentUser, onUpdate }: { user: User; o
 
     try {
       // Update User Profile
-      const userRes = await fetch(`/api/profile/${currentUser.id}`, {
+      const userRes = await fetch(`/api/profile/${currentUser?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, bio, profile_picture: profilePicture }),

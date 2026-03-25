@@ -51,6 +51,9 @@ export default function Home({ user }: { user: User | null }) {
     fetchItems();
 
     socket.on('engagement', ({ itemId, type, count, comment, userName }) => {
+      // Guard against undefined itemId
+      if (!itemId) return;
+      
       if (type === 'like') {
         setItems(prev => prev.map(item => 
           item.id === itemId ? { ...item, likes: count } : item
@@ -82,13 +85,17 @@ export default function Home({ user }: { user: User | null }) {
     });
 
     socket.on('message', (msg: Message) => {
-      if (selectedBusiness && (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id)) {
+      // Guard against null selectedBusiness
+      if (!selectedBusiness) return;
+      if (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id) {
         setMessages(prev => [...prev, msg]);
       }
     });
 
     socket.on('notification', (data) => {
-      if (user && data.receiver_id === user.id) {
+      // Guard against null user
+      if (!user) return;
+      if (data.receiver_id === user.id) {
         // Play vibration and beep sound when notification is received
         playNotificationAlert();
         
@@ -105,7 +112,7 @@ export default function Home({ user }: { user: User | null }) {
       socket.off('message');
       socket.off('notification');
     };
-  }, [selectedBusiness, user.id]);
+  }, [selectedBusiness, user?.id]);
 
   useEffect(() => {
     if (itemId && items.length > 0) {
@@ -137,7 +144,7 @@ export default function Home({ user }: { user: User | null }) {
       await fetch(`/api/items/${item.id}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
+        body: JSON.stringify({ userId: user?.id })
       });
     } catch (err) {
       console.error('Failed to track share:', err);
@@ -196,7 +203,7 @@ export default function Home({ user }: { user: User | null }) {
       await fetch(`/api/items/${itemId}/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: user?.id }),
       });
     } catch (err) {
       console.error(err);
@@ -209,9 +216,9 @@ export default function Home({ user }: { user: User | null }) {
       const res = await fetch(`/api/items/${itemId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId: user.id, 
-          userName: user.name, 
+        body: JSON.stringify({
+          userId: user?.id,
+          userName: user?.name,
           text: newComment,
           parentId: replyTo?.id,
           attachment: attachment || commentAttachment
@@ -270,7 +277,7 @@ export default function Home({ user }: { user: User | null }) {
       const data = await res.json();
       setSelectedBusiness(data);
       
-      const followRes = await fetch(`/api/businesses/${businessId}/follow-status/${user.id}`);
+      const followRes = await fetch(`/api/businesses/${businessId}/follow-status/${user?.id}`);
       if (followRes.ok) {
         const followData = await followRes.json();
         setIsFollowing(followData.isFollowing);
@@ -284,14 +291,14 @@ export default function Home({ user }: { user: User | null }) {
     if (!selectedBusiness) return;
     try {
       const method = isFollowing ? 'DELETE' : 'POST';
-      const url = isFollowing 
-        ? `/api/businesses/${selectedBusiness.id}/follow/${user.id}`
+      const url = isFollowing
+        ? `/api/businesses/${selectedBusiness.id}/follow/${user?.id}`
         : `/api/businesses/${selectedBusiness.id}/follow`;
       
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id }),
+        body: JSON.stringify({ userId: user?.id }),
       });
       if (res.ok) {
         setIsFollowing(!isFollowing);
@@ -311,7 +318,7 @@ export default function Home({ user }: { user: User | null }) {
   const fetchMessages = async () => {
     if (!selectedBusiness) return;
     try {
-      const res = await fetch(`/api/messages/${user.id}/${selectedBusiness.owner_id}`);
+      const res = await fetch(`/api/messages/${user?.id}/${selectedBusiness.owner_id}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -329,7 +336,7 @@ export default function Home({ user }: { user: User | null }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user.id,
+          sender_id: user?.id,
           receiver_id: selectedBusiness.owner_id,
           text: newMessage,
           attachment
@@ -443,7 +450,7 @@ export default function Home({ user }: { user: User | null }) {
                 >
                   Reply
                 </button>
-                {comment.user_id === user.id && (
+                {comment.user_id === user?.id && (
                   <button 
                     onClick={() => { setEditingComment(comment); setEditText(comment.text); }}
                     className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest hover:underline flex items-center gap-1"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -13,6 +13,8 @@ import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
 import BusinessPage from './pages/Business';
 import InboxPage from './pages/Inbox';
+import PrivacyPage from './pages/Privacy';
+import TermsPage from './pages/Terms';
 import { ToastProvider } from './components/Toast';
 import { User as UserType, Business } from './types';
 import socket from './socket';
@@ -124,7 +126,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && user.id) {
       // Join user's notification room
       socket.emit('join', user.id);
       
@@ -325,6 +327,8 @@ export default function App() {
             <Route path="/auth" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/" replace />} />
             <Route path="/verify-email" element={!user ? <VerifyEmailPage /> : <Navigate to="/" replace />} />
             <Route path="/reset-password" element={!user ? <ResetPasswordPage /> : <Navigate to="/" replace />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
             <Route
               path="/"
               element={<HomePage user={user} />}
@@ -372,27 +376,41 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
   ];
 
   return (
-    <div className="flex flex-col min-h-screen pb-16 md:pb-0 md:pl-64">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-30 flex items-center justify-between h-16 px-4 bg-white/80 backdrop-blur-md border-b border-neutral-200 md:hidden">
-        <button onClick={() => setIsSideMenuOpen(true)} className="p-2 -ml-2 text-neutral-600">
-          <Menu size={24} />
-        </button>
-        <span className="text-xl font-bold tracking-tight text-emerald-600">Vitu</span>
-        <div className="flex items-center gap-2">
+    <div className="flex flex-col min-h-screen">
+      {/* Top Navigation Bar - Always Visible */}
+      <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-sm">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setIsSideMenuOpen(true)} className="p-2 -ml-2 text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors">
+            <Menu size={22} />
+          </button>
+          <Link to="/" className="text-xl font-bold tracking-tight text-emerald-600">
+            Vitu
+          </Link>
+        </div>
+        
+        {/* Search Button */}
+        <Link 
+          to="/" 
+          className="flex items-center gap-2 px-3 py-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors"
+        >
+          <Search size={18} />
+          <span className="text-sm hidden sm:inline">Search</span>
+        </Link>
+        
+        <div className="flex items-center gap-1">
           {unreadCount > 0 && (
             <Link to="/" onClick={() => setUnreadCount(0)} className="relative p-2 text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
-              <Bell size={24} />
+              <Bell size={22} />
               <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             </Link>
           )}
-          <Link to="/profile" className="w-10 h-10 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300">
+          <Link to="/profile" className="w-9 h-9 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300 hover:border-emerald-500 transition-colors">
             {user.profile_picture ? (
               <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold">
+              <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-sm">
                 {user.name[0]}
               </div>
             )}
@@ -400,38 +418,53 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
         </div>
       </header>
 
-      {/* Side Menu (Desktop & Mobile Overlay) */}
+      {/* Side Menu (Slide-out Drawer) */}
       <AnimatePresence>
-        {(isSideMenuOpen || window.innerWidth >= 768) && (
+        {isSideMenuOpen && (
           <>
             {/* Mobile Overlay */}
-            {isSideMenuOpen && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsSideMenuOpen(false)}
-                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm md:hidden"
-              />
-            )}
-            {/* Sidebar */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSideMenuOpen(false)}
+              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+            />
+            {/* Sidebar Drawer */}
             <motion.aside
               initial={{ x: -300 }}
               animate={{ x: 0 }}
               exit={{ x: -300 }}
-              className={cn(
-                "fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-neutral-200 flex flex-col transition-transform md:translate-x-0",
-                !isSideMenuOpen && "hidden md:flex"
-              )}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-neutral-200 flex flex-col shadow-2xl"
             >
-              <div className="flex items-center justify-between h-16 px-6 border-b border-neutral-100">
+              <div className="flex items-center justify-between h-14 px-6 border-b border-neutral-100">
                 <span className="text-2xl font-bold tracking-tighter text-emerald-600">Vitu</span>
-                <button onClick={() => setIsSideMenuOpen(false)} className="p-2 -mr-2 text-neutral-400 md:hidden">
+                <button onClick={() => setIsSideMenuOpen(false)} className="p-2 -mr-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
-              <nav className="flex-1 px-4 py-6 space-y-2">
+              {/* User Info */}
+              <div className="p-4 border-b border-neutral-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-neutral-200 overflow-hidden border-2 border-emerald-500">
+                    {user.profile_picture ? (
+                      <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-lg">
+                        {user.name[0]}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-neutral-900 truncate">{user.name}</p>
+                    <p className="text-sm text-neutral-500 truncate">{user.email}</p>
+                  </div>
+                </div>
+              </div>
+
+              <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
@@ -441,7 +474,7 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
                       "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
                       location.pathname === item.path
                         ? "bg-emerald-50 text-emerald-600 font-medium"
-                        : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+                        : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
                     )}
                   >
                     <item.icon size={20} />
@@ -450,9 +483,25 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
                 ))}
               </nav>
 
-              <div className="p-4 border-t border-neutral-100">
+              <div className="p-4 border-t border-neutral-100 space-y-2">
+                <Link
+                  to="/privacy"
+                  onClick={() => setIsSideMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
+                >
+                  <Settings size={20} />
+                  Privacy Policy
+                </Link>
+                <Link
+                  to="/terms"
+                  onClick={() => setIsSideMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
+                >
+                  <Check size={20} />
+                  Terms of Service
+                </Link>
                 <button
-                  onClick={onLogout}
+                  onClick={() => { setIsSideMenuOpen(false); onLogout(); }}
                   className="flex items-center gap-3 w-full px-4 py-3 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
                 >
                   <LogOut size={20} />
@@ -465,23 +514,30 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl mx-auto w-full p-4 md:p-8">
+      <main className="flex-1 max-w-4xl mx-auto w-full p-4 pb-20 md:pb-24">
         {children}
       </main>
 
-      {/* Bottom Navigation (Mobile Only) */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 h-16 bg-white/90 backdrop-blur-lg border-t border-neutral-200 flex items-center justify-around md:hidden">
+      {/* Bottom Navigation Bar - All Devices */}
+      <nav className="fixed bottom-0 inset-x-0 z-50 h-16 bg-white/95 backdrop-blur-lg border-t border-neutral-200 flex items-center justify-around shadow-lg">
         {navItems.map((item) => (
           <Link
             key={item.path}
             to={item.path}
             className={cn(
-              "flex flex-col items-center gap-1 transition-colors",
-              location.pathname === item.path ? "text-emerald-600" : "text-neutral-400"
+              "flex flex-col items-center justify-center flex-1 h-full transition-all duration-200",
+              location.pathname === item.path 
+                ? "text-emerald-600 bg-emerald-50" 
+                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
             )}
           >
-            <item.icon size={22} />
-            <span className="text-[10px] font-medium uppercase tracking-widest">{item.label}</span>
+            <div className={cn(
+              "p-1.5 rounded-xl transition-colors",
+              location.pathname === item.path ? "bg-emerald-100" : ""
+            )}>
+              <item.icon size={22} />
+            </div>
+            <span className="text-[10px] font-medium uppercase tracking-wider mt-0.5">{item.label}</span>
           </Link>
         ))}
       </nav>

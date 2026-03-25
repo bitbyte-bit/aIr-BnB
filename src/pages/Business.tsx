@@ -154,7 +154,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user.id,
+          sender_id: user?.id,
           receiver_id: replyingTo.sender_id,
           text: replyText,
         }),
@@ -180,10 +180,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const res = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ownerId: user.id, 
-          name, 
-          description, 
+        body: JSON.stringify({
+          ownerId: user?.id,
+          name,
+          description,
           logo,
           address,
           contacts,
@@ -222,7 +222,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user.id,
+          sender_id: user?.id,
           receiver_id: adminId,
           text: `Hello Admin, I would like to request approval for my business: ${business.name}. Please review my profile.`,
         }),
