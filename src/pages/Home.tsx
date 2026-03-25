@@ -9,7 +9,7 @@ import { useToast } from '../components/Toast';
 import OpenGraphMeta from '../components/OpenGraphMeta';
 import ReviewModal from '../components/ReviewModal';
 
-export default function Home({ user }: { user: User }) {
+export default function Home({ user }: { user: User | null }) {
   const { itemId } = useParams();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -41,6 +41,11 @@ export default function Home({ user }: { user: User }) {
 
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
+
+  // Redirect to auth if trying to interact without login
+  const requireAuth = () => {
+    navigate('/auth');
+  };
 
   useEffect(() => {
     fetchItems();
@@ -83,7 +88,7 @@ export default function Home({ user }: { user: User }) {
     });
 
     socket.on('notification', (data) => {
-      if (data.receiver_id === user.id) {
+      if (user && data.receiver_id === user.id) {
         // Play vibration and beep sound when notification is received
         playNotificationAlert();
         

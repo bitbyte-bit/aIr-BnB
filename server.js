@@ -34,7 +34,7 @@ console.log('Web Push VAPID public key:', vapidKeys.publicKey.substring(0, 20) +
 const emailConfig = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false,
+  secure: parseInt(process.env.SMTP_PORT || '587') === 465,
   auth: {
     user: process.env.SMTP_USER || '',
     pass: process.env.SMTP_PASS || ''
@@ -86,20 +86,11 @@ async function sendVerificationEmail(email, name, token) {
   if (transporter) {
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`Verification email sent to ${email}`);
       return true;
     } catch (error) {
       console.error('Error sending verification email:', error);
       return false;
     }
-  } else {
-    // Log the email content for development
-    console.log('=== VERIFICATION EMAIL (Development Mode) ===');
-    console.log(`To: ${email}`);
-    console.log(`Subject: ${mailOptions.subject}`);
-    console.log(`URL: ${verificationUrl}`);
-    console.log('=============================================');
-    return true;
   }
 }
 
@@ -130,20 +121,11 @@ async function sendPasswordResetEmail(email, name, token) {
   if (transporter) {
     try {
       await transporter.sendMail(mailOptions);
-      console.log(`Password reset email sent to ${email}`);
       return true;
     } catch (error) {
       console.error('Error sending password reset email:', error);
       return false;
     }
-  } else {
-    // Log the email content for development
-    console.log('=== PASSWORD RESET EMAIL (Development Mode) ===');
-    console.log(`To: ${email}`);
-    console.log(`Subject: ${mailOptions.subject}`);
-    console.log(`URL: ${resetUrl}`);
-    console.log('=================================================');
-    return true;
   }
 }
 

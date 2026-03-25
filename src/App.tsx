@@ -326,26 +326,31 @@ export default function App() {
             <Route path="/verify-email" element={!user ? <VerifyEmailPage /> : <Navigate to="/" replace />} />
             <Route path="/reset-password" element={!user ? <ResetPasswordPage /> : <Navigate to="/" replace />} />
             <Route
-              path="*"
-              element={
-                user ? (
-                  <Layout user={user} business={business} onLogout={handleLogout} unreadCount={unreadCount} setUnreadCount={setUnreadCount}>
-                    <Routes>
-                      <Route path="/" element={<HomePage user={user} />} />
-                      <Route path="/item/:itemId" element={<HomePage user={user} />} />
-                      <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-                      <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-                      <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
-                      <Route path="/inbox" element={<InboxPage user={user} />} />
-                      {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </Layout>
-                ) : (
-                  <Navigate to="/auth" replace />
-                )
-              }
+              path="/"
+              element={<HomePage user={user} />}
             />
+            <Route
+              path="/item/:itemId"
+              element={<HomePage user={user} />}
+            />
+            <Route
+              path="/profile"
+              element={user ? <ProfilePage user={user} onUpdate={handleLogin} /> : <Navigate to="/auth" replace />}
+            />
+            <Route
+              path="/profile/:userId"
+              element={user ? <ProfilePage user={user} onUpdate={handleLogin} /> : <Navigate to="/auth" replace />}
+            />
+            <Route
+              path="/business"
+              element={user ? <BusinessPage user={user} business={business} onUpdate={fetchBusiness} /> : <Navigate to="/auth" replace />}
+            />
+            <Route
+              path="/inbox"
+              element={user ? <InboxPage user={user} /> : <Navigate to="/auth" replace />}
+            />
+            {user?.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AnimatePresence>
       </div>
