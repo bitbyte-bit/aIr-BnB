@@ -1796,8 +1796,12 @@ async function startServer() {
       }
     }));
 
-    // Main app SPA fallback - only serve index.html for root path
+    // Main app SPA fallback - serve index.html for all routes
     app.get("/", (req, res) => {
+      res.sendFile(path.join(__dirname, "dist", "index.html"));
+    });
+    // Also handle other routes for SPA
+    app.get("/*", (req, res) => {
       res.sendFile(path.join(__dirname, "dist", "index.html"));
     });
   } else {

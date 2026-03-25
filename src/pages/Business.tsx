@@ -681,7 +681,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                           return handles.map((h: any, i: number) => (
                             <a
                               key={i}
-                              href={h.url.startsWith('http') ? h.url : `https://${h.url}`}
+                              href={h.url?.startsWith('http') ? h.url : `https://${h.url}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
@@ -690,7 +690,9 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                             </a>
                           ));
                         }
-                      } catch (e) {}
+                      } catch (e) {
+                        console.error('Error parsing social handles:', e);
+                      }
                       return <p className="text-sm font-medium text-neutral-700">Not provided</p>;
                     })()}
                   </div>

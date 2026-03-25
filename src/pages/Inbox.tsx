@@ -68,7 +68,7 @@ export default function Inbox({ user }: InboxProps) {
 
   const fetchMessages = async (otherUserId: number) => {
     try {
-      const res = await fetch(`/api/messages/${otherUserId}?userId=${user?.id}`);
+      const res = await fetch(`/api/messages/${user?.id}/${otherUserId}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);

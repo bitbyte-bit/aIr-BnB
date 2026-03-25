@@ -931,11 +931,11 @@ export default function Home({ user }: { user: User | null }) {
                     >
                       <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
                         {messages.map((m) => (
-                          <div 
-                            key={m.id} 
+                          <div
+                            key={m.id}
                             className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                              m.sender_id === user.id 
-                                ? 'bg-emerald-600 text-white self-end rounded-tr-none' 
+                              m.sender_id === user?.id
+                                ? 'bg-emerald-600 text-white self-end rounded-tr-none'
                                 : 'bg-white border border-neutral-200 text-neutral-900 self-start rounded-tl-none'
                             }`}
                           >
@@ -1031,10 +1031,10 @@ export default function Home({ user }: { user: User | null }) {
                                   const handles = selectedBusiness.social_handles ? JSON.parse(selectedBusiness.social_handles) : [];
                                   if (Array.isArray(handles) && handles.length > 0) {
                                     return handles.map((h: any, i: number) => (
-                                      <a 
-                                        key={i} 
-                                        href={h.url.startsWith('http') ? h.url : `https://${h.url}`} 
-                                        target="_blank" 
+                                      <a
+                                        key={i}
+                                        href={h.url?.startsWith('http') ? h.url : `https://${h.url}`}
+                                        target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
                                       >
@@ -1042,7 +1042,9 @@ export default function Home({ user }: { user: User | null }) {
                                       </a>
                                     ));
                                   }
-                                } catch (e) {}
+                                } catch (e) {
+                                  console.error('Error parsing social handles:', e);
+                                }
                                 return <p className="text-sm font-bold text-neutral-900">Not specified</p>;
                               })()}
                             </div>
@@ -1137,15 +1139,25 @@ export default function Home({ user }: { user: User | null }) {
                         <div className="h-px flex-1 bg-neutral-100"></div>
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {JSON.parse(selectedItem.gallery).map((img: string, i: number) => (
-                          <motion.div 
-                            key={i} 
-                            whileHover={{ scale: 1.02 }}
-                            className="aspect-square rounded-[2rem] overflow-hidden border border-neutral-100 shadow-sm"
-                          >
-                            <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                          </motion.div>
-                        ))}
+                        {(() => {
+                          try {
+                            const gallery = JSON.parse(selectedItem.gallery);
+                            if (Array.isArray(gallery)) {
+                              return gallery.map((img: string, i: number) => (
+                                <motion.div
+                                  key={i}
+                                  whileHover={{ scale: 1.02 }}
+                                  className="aspect-square rounded-[2rem] overflow-hidden border border-neutral-100 shadow-sm"
+                                >
+                                  <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                </motion.div>
+                              ));
+                            }
+                          } catch (e) {
+                            console.error('Error parsing gallery:', e);
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   )}
@@ -1159,12 +1171,22 @@ export default function Home({ user }: { user: User | null }) {
                         <div className="h-px flex-1 bg-neutral-100"></div>
                       </h4>
                       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {Object.entries(JSON.parse(selectedItem.custom_fields)).map(([key, value]) => (
-                          <div key={key} className="p-6 bg-neutral-50 rounded-[2rem] border border-neutral-100">
-                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">{key}</p>
-                            <p className="text-lg font-black text-neutral-900">{(value as string)}</p>
-                          </div>
-                        ))}
+                        {(() => {
+                          try {
+                            const fields = JSON.parse(selectedItem.custom_fields);
+                            if (typeof fields === 'object' && fields !== null) {
+                              return Object.entries(fields).map(([key, value]) => (
+                                <div key={key} className="p-6 bg-neutral-50 rounded-[2rem] border border-neutral-100">
+                                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">{key}</p>
+                                  <p className="text-lg font-black text-neutral-900">{(value as string)}</p>
+                                </div>
+                              ));
+                            }
+                          } catch (e) {
+                            console.error('Error parsing custom fields:', e);
+                          }
+                          return null;
+                        })()}
                       </div>
                     </div>
                   )}

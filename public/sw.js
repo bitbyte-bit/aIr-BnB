@@ -19,7 +19,22 @@ self.addEventListener('fetch', (event) => {
   }
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+      if (response) {
+        return response;
+      }
+      // If not in cache, try to fetch from network
+      return fetch(event.request).catch(() => {
+        // If network fails, return a fallback response or undefined
+        // For navigation requests, return the cached index.html
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+        // For other requests, just let it fail silently
+        return undefined;
+      });
+    }).catch((err) => {
+      console.error('[SW] Cache match error:', err);
+      return undefined;
     })
   );
 });
@@ -40,7 +55,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: data.body,
     icon: data.icon || '/icon-192.png',
-    badge: data.badge || '/badge-72.png',
+    badge: data.badge || '/icon-72.png',
     tag: data.tag || 'default',
     data: data.data || {},
     // Vibration pattern: [vibrate, pause, vibrate, pause, vibrate]

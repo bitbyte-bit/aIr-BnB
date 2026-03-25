@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare, Search } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare, Search, FileText, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -80,8 +80,14 @@ export default function App() {
   }, [unreadCount]);
 
   useEffect(() => {
+    // Check if already installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
     const isDismissed = sessionStorage.getItem('pwa_banner_dismissed');
+
+    // Show banner if not standalone and not dismissed
+    if (!isStandalone && !isDismissed) {
+      setShowInstallBanner(true);
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -323,39 +329,35 @@ export default function App() {
         </AnimatePresence>
 
         <AnimatePresence mode="wait">
-          <Routes>
-            <Route path="/auth" element={!user ? <AuthPage onLogin={handleLogin} /> : <Navigate to="/" replace />} />
-            <Route path="/verify-email" element={!user ? <VerifyEmailPage /> : <Navigate to="/" replace />} />
-            <Route path="/reset-password" element={!user ? <ResetPasswordPage /> : <Navigate to="/" replace />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route
-              path="/"
-              element={<HomePage user={user} />}
-            />
-            <Route
-              path="/item/:itemId"
-              element={<HomePage user={user} />}
-            />
-            <Route
-              path="/profile"
-              element={user ? <ProfilePage user={user} onUpdate={handleLogin} /> : <Navigate to="/auth" replace />}
-            />
-            <Route
-              path="/profile/:userId"
-              element={user ? <ProfilePage user={user} onUpdate={handleLogin} /> : <Navigate to="/auth" replace />}
-            />
-            <Route
-              path="/business"
-              element={user ? <BusinessPage user={user} business={business} onUpdate={fetchBusiness} /> : <Navigate to="/auth" replace />}
-            />
-            <Route
-              path="/inbox"
-              element={user ? <InboxPage user={user} /> : <Navigate to="/auth" replace />}
-            />
-            {user?.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {user ? (
+            <Layout
+              user={user}
+              business={business}
+              onLogout={handleLogout}
+              unreadCount={unreadCount}
+              setUnreadCount={setUnreadCount}
+            >
+              <Routes>
+                <Route path="/" element={<HomePage user={user} />} />
+                <Route path="/item/:itemId" element={<HomePage user={user} />} />
+                <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+                <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+                <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
+                <Route path="/inbox" element={<InboxPage user={user} />} />
+                {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          ) : (
+            <Routes>
+              <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="*" element={<Navigate to="/auth" replace />} />
+            </Routes>
+          )}
         </AnimatePresence>
       </div>
       </ToastProvider>
@@ -485,6 +487,14 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
 
               <div className="p-4 border-t border-neutral-100 space-y-2">
                 <Link
+                  to="/auth"
+                  onClick={() => setIsSideMenuOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
+                >
+                  <LogIn size={20} />
+                  Login / Sign Up
+                </Link>
+                <Link
                   to="/privacy"
                   onClick={() => setIsSideMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
@@ -497,7 +507,7 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
                   onClick={() => setIsSideMenuOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
                 >
-                  <Check size={20} />
+                  <FileText size={20} />
                   Terms of Service
                 </Link>
                 <button
