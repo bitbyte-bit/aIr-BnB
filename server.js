@@ -61,7 +61,7 @@ if (emailConfig.auth.user && emailConfig.auth.pass) {
 
 // Function to send verification email
 async function sendVerificationEmail(email, name, token) {
-  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.APP_URL || 'https://zionnent.com';
   const verificationUrl = `${appUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
   
   const mailOptions = {
@@ -96,7 +96,7 @@ async function sendVerificationEmail(email, name, token) {
 
 // Function to send password reset email
 async function sendPasswordResetEmail(email, name, token) {
-  const appUrl = process.env.APP_URL || 'http://localhost:3000';
+  const appUrl = process.env.APP_URL || 'https://zionnent.com';
   const resetUrl = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
   
   const mailOptions = {
@@ -471,17 +471,21 @@ try {
 // Seed System User and Master Admin
 const existingSystemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
 if (!existingSystemUser) {
+  const saltRounds = 10;
+  const systemUserHashedPassword = bcrypt.hashSync("system", saltRounds);
+  const adminUserHashedPassword = bcrypt.hashSync("vituadmin123", saltRounds);
+  
   db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
     "vitu@system.com",
-    "system",
+    systemUserHashedPassword,
     "Vitu System",
     "user"
   );
   
-  // Seed Master Admin
+  // Seed Master Admin with requested credentials
   db.prepare("INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)").run(
-    "vitu@gmail.com",
-    "vitu",
+    "vitu@zionnent.com",
+    adminUserHashedPassword,
     "Master Admin",
     "admin"
   );
@@ -1813,7 +1817,7 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  const PORT = 3000;
+  const PORT = process.env.PORT || 3000;
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
   });
