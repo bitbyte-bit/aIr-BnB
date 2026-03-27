@@ -13,11 +13,14 @@ interface State {
 }
 
 class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
-    hasError: false,
-    error: null,
-    errorInfo: null,
-  };
+  constructor(props: Props) {
+    super(props);
+    this.state = {
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    };
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error, errorInfo: null };
@@ -27,15 +30,13 @@ class ErrorBoundary extends Component<Props, State> {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ error, errorInfo });
     
-    // Log to error reporting service in production
-    if (process.env.NODE_ENV === 'production') {
-      // TODO: Send to error reporting service (e.g., Sentry, LogRocket)
-      console.error('Production error:', {
-        error: error.toString(),
-        stack: error.stack,
-        componentStack: errorInfo.componentStack,
-      });
-    }
+    // Always log to error reporting service in production mode
+    // TODO: Send to error reporting service (e.g., Sentry, LogRocket)
+    console.error('Production error:', {
+      error: error.toString(),
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   private handleReload = () => {
@@ -66,24 +67,6 @@ class ErrorBoundary extends Component<Props, State> {
             <p className="text-neutral-600 mb-6">
               We're sorry, but something unexpected happened. Please try refreshing the page or go back to the home page.
             </p>
-
-            {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mb-6 text-left">
-                <summary className="cursor-pointer text-sm font-medium text-neutral-700 mb-2">
-                  Error Details (Development Only)
-                </summary>
-                <div className="bg-neutral-100 rounded-lg p-4 overflow-auto max-h-48">
-                  <p className="text-xs font-mono text-red-600 mb-2">
-                    {this.state.error.toString()}
-                  </p>
-                  {this.state.error.stack && (
-                    <pre className="text-xs text-neutral-600 whitespace-pre-wrap">
-                      {this.state.error.stack}
-                    </pre>
-                  )}
-                </div>
-              </details>
-            )}
 
             <div className="flex gap-3">
               <button

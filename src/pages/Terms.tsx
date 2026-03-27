@@ -188,7 +188,7 @@ export default function TermsPage() {
               </p>
               <ul className="list-disc list-inside text-neutral-600 mt-4 space-y-2">
                 <li>Email: legal@vitu.app</li>
-                <li>Website: https://vitu.app</li>
+                <li>Website: https://zionnent.com/vitu</li>
               </ul>
             </section>
           </div>

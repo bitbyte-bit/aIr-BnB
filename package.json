@@ -4,16 +4,11 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "start": "set NODE_ENV=production&& node server.js",
+    "start": "node server.js",
     "build": "vite build",
-    "build:admin": "cd admin && npm install && npm run build",
-    "build:all": "npm run build && npm run build:admin",
-    "preview": "vite preview",
-    "clean": "rm -rf dist",
-    "lint": "tsc --noEmit",
     "generate-icons": "node scripts/generate-icons.js",
-    "prepare-pwa": "npm run generate-icons && npm run build"
+    "prepare-pwa": "npm run generate-icons && npm run build",
+    "postinstall": "npm rebuild better-sqlite3"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

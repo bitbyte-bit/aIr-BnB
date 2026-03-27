@@ -299,7 +299,7 @@ Create a `.env.local` file with:
 
 ```env
 # App URL (your production domain)
-APP_URL="https://vitu.app"
+APP_URL="https://zionnent.com/vitu"
 
 # VAPID Keys for Push Notifications
 VAPID_PUBLIC_KEY="your-public-key"
@@ -364,9 +364,9 @@ NODE_ENV="production"
 
 For questions or issues:
 - **Email**: support@vitu.app
-- **Website**: https://vitu.app
-- **Privacy Policy**: https://vitu.app/privacy
-- **Terms of Service**: https://vitu.app/terms
+- **Website**: https://zionnent.com/vitu
+- **Privacy Policy**: https://zionnent.com/vitu/privacy
+- **Terms of Service**: https://zionnent.com/vitu/terms
 
 ---
 

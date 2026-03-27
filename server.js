@@ -519,7 +519,7 @@ async function startServer() {
   });
 
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", env: process.env.NODE_ENV });
+    res.json({ status: "ok", env: "production" });
   });
 
   // Push Notification Routes
@@ -1709,11 +1709,11 @@ async function startServer() {
     }
   });
 
-  // Check if running in production mode
-  const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.join(__dirname, 'dist'));
+  // Always run in production mode
+  const isProduction = true;
   
   // Validate production mode has dist folder
-  if (isProduction && !fs.existsSync(path.join(__dirname, 'dist'))) {
+  if (!fs.existsSync(path.join(__dirname, 'dist'))) {
     console.error("[ERROR] Production mode requires running 'npm run build' first!");
     console.error("[ERROR] Run 'npm run build' to create the dist folder, then try again.");
     process.exit(1);
@@ -1819,7 +1819,7 @@ async function startServer() {
 
   const PORT = process.env.PORT || 3000;
   httpServer.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+    console.log(`Server running on port ${PORT} in production mode`);
   });
 
   // Track connected users: Map<socketId, userId>

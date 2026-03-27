@@ -161,7 +161,7 @@ export default function PrivacyPage() {
               </p>
               <ul className="list-disc list-inside text-neutral-600 mt-4 space-y-2">
                 <li>Email: privacy@vitu.app</li>
-                <li>Website: https://vitu.app</li>
+                <li>Website: https://zionnent.com/vitu</li>
               </ul>
             </section>
           </div>

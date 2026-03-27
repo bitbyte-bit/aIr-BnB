@@ -328,53 +328,48 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        <AnimatePresence mode="wait">
-          {user ? (
-            <Layout
-              user={user}
-              business={business}
-              onLogout={handleLogout}
-              unreadCount={unreadCount}
-              setUnreadCount={setUnreadCount}
-            >
-              <Routes>
-                <Route path="/" element={<HomePage user={user} />} />
-                <Route path="/item/:itemId" element={<HomePage user={user} />} />
-                <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-                <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-                <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
-                <Route path="/inbox" element={<InboxPage user={user} />} />
-                {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </Layout>
-          ) : (
-            <Routes>
-              <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
-              <Route path="/verify-email" element={<VerifyEmailPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/privacy" element={<PrivacyPage />} />
-              <Route path="/terms" element={<TermsPage />} />
-              <Route path="*" element={<Navigate to="/auth" replace />} />
-            </Routes>
-          )}
-        </AnimatePresence>
+        <Layout
+          user={user}
+          business={business}
+          onLogout={handleLogout}
+          onLogin={handleLogin}
+          unreadCount={unreadCount}
+          setUnreadCount={setUnreadCount}
+        >
+          <Routes>
+            <Route path="/" element={<HomePage user={user} />} />
+            <Route path="/item/:itemId" element={<HomePage user={user} />} />
+            <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+            <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+            <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
+            <Route path="/inbox" element={<InboxPage user={user} />} />
+            <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
+            <Route path="/verify-email" element={<VerifyEmailPage />} />
+            <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            {user && user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
       </div>
       </ToastProvider>
     </Router>
   );
 }
 
-function Layout({ children, user, business, onLogout, unreadCount, setUnreadCount }: { children: React.ReactNode; user: UserType; business: Business | null; onLogout: () => void; unreadCount: number; setUnreadCount: (count: number) => void }) {
+function Layout({ children, user, business, onLogout, onLogin, unreadCount, setUnreadCount }: { children: React.ReactNode; user: UserType | null; business: Business | null; onLogout: () => void; onLogin: (userData: UserType) => void; unreadCount: number; setUnreadCount: (count: number) => void }) {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
 
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
-    { label: 'Profile', icon: User, path: '/profile' },
-    { label: 'Inbox', icon: MessageSquare, path: '/inbox' },
-    { label: business ? 'My Business' : 'Register Business', icon: Briefcase, path: '/business' },
-    ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
+    ...(user ? [
+      { label: 'Profile', icon: User, path: '/profile' },
+      { label: 'Inbox', icon: MessageSquare, path: '/inbox' },
+      { label: business ? 'My Business' : 'Register Business', icon: Briefcase, path: '/business' },
+      ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
+    ] : []),
   ];
 
   return (
@@ -400,7 +395,7 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
         </Link>
         
         <div className="flex items-center gap-1">
-          {unreadCount > 0 && (
+          {user && unreadCount > 0 && (
             <Link to="/" onClick={() => setUnreadCount(0)} className="relative p-2 text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
               <Bell size={22} />
               <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -408,15 +403,26 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
               </span>
             </Link>
           )}
-          <Link to="/profile" className="w-9 h-9 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300 hover:border-emerald-500 transition-colors">
-            {user.profile_picture ? (
-              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-sm">
-                {user.name[0]}
-              </div>
-            )}
-          </Link>
+          {user && (
+            <Link to="/profile" className="w-9 h-9 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300 hover:border-emerald-500 transition-colors">
+              {user.profile_picture ? (
+                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-sm">
+                  {user.name[0]}
+                </div>
+              )}
+            </Link>
+          )}
+          {!user && (
+            <Link
+              to="/auth"
+              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+            >
+              <LogIn size={18} />
+              <span className="hidden sm:inline">Login</span>
+            </Link>
+          )}
         </div>
       </header>
 
@@ -447,24 +453,26 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
                 </button>
               </div>
 
-              {/* User Info */}
-              <div className="p-4 border-b border-neutral-100">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-neutral-200 overflow-hidden border-2 border-emerald-500">
-                    {user.profile_picture ? (
-                      <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-lg">
-                        {user.name[0]}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-neutral-900 truncate">{user.name}</p>
-                    <p className="text-sm text-neutral-500 truncate">{user.email}</p>
+              {/* User Info - Only show when logged in */}
+              {user && (
+                <div className="p-4 border-b border-neutral-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-neutral-200 overflow-hidden border-2 border-emerald-500">
+                      {user.profile_picture ? (
+                        <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-lg">
+                          {user.name[0]}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-neutral-900 truncate">{user.name}</p>
+                      <p className="text-sm text-neutral-500 truncate">{user.email}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
                 {navItems.map((item) => (
@@ -486,14 +494,16 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
               </nav>
 
               <div className="p-4 border-t border-neutral-100 space-y-2">
-                <Link
-                  to="/auth"
-                  onClick={() => setIsSideMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
-                >
-                  <LogIn size={20} />
-                  Login / Sign Up
-                </Link>
+                {!user && (
+                  <Link
+                    to="/auth"
+                    onClick={() => setIsSideMenuOpen(false)}
+                    className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
+                  >
+                    <LogIn size={20} />
+                    Login / Sign Up
+                  </Link>
+                )}
                 <Link
                   to="/privacy"
                   onClick={() => setIsSideMenuOpen(false)}
@@ -510,13 +520,15 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
                   <FileText size={20} />
                   Terms of Service
                 </Link>
-                <button
-                  onClick={() => { setIsSideMenuOpen(false); onLogout(); }}
-                  className="flex items-center gap-3 w-full px-4 py-3 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                >
-                  <LogOut size={20} />
-                  Sign Out
-                </button>
+                {user && (
+                  <button
+                    onClick={() => { setIsSideMenuOpen(false); onLogout(); }}
+                    className="flex items-center gap-3 w-full px-4 py-3 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                  >
+                    <LogOut size={20} />
+                    Sign Out
+                  </button>
+                )}
               </div>
             </motion.aside>
           </>
@@ -550,6 +562,25 @@ function Layout({ children, user, business, onLogout, unreadCount, setUnreadCoun
             <span className="text-[10px] font-medium uppercase tracking-wider mt-0.5">{item.label}</span>
           </Link>
         ))}
+        {!user && (
+          <Link
+            to="/auth"
+            className={cn(
+              "flex flex-col items-center justify-center flex-1 h-full transition-all duration-200",
+              location.pathname === '/auth' 
+                ? "text-emerald-600 bg-emerald-50" 
+                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
+            )}
+          >
+            <div className={cn(
+              "p-1.5 rounded-xl transition-colors",
+              location.pathname === '/auth' ? "bg-emerald-100" : ""
+            )}>
+              <LogIn size={22} />
+            </div>
+            <span className="text-[10px] font-medium uppercase tracking-wider mt-0.5">Login</span>
+          </Link>
+        )}
       </nav>
     </div>
   );

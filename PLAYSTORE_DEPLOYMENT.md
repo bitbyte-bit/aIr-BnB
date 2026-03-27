@@ -118,18 +118,18 @@ firebase deploy --only hosting
 ### Step 4: Create Android APK with PWA Builder
 
 1. Go to [pwabuilder.com](https://pwabuilder.com)
-2. Enter your PWA URL (e.g., `https://vitu.app`)
+2. Enter your PWA URL (e.g., `https://zionnent.com/vitu`)
 3. Click "Package for Stores"
 4. Select "Android" platform
 5. Configure settings:
    - **Package ID**: `app.vitu.android`
    - **App Name**: Vitu
    - **App Version**: 1.0.0
-   - **Host**: vitu.app
-   - **Start URL**: /
+   - **Host**: zionnent.com
+   - **Start URL**: /vitu
    - **Theme Color**: #10b981
    - **Background Color**: #ffffff
-   - **Icon URL**: https://vitu.app/icon-512.png
+   - **Icon URL**: https://zionnent.com/vitu/icon-512.png
 6. Click "Generate Package"
 7. Download the `.aab` file (Android App Bundle)
 
@@ -160,7 +160,7 @@ firebase deploy --only hosting
    - Accept content guidelines
 
 4. **Privacy Policy**
-   - Enter URL: `https://vitu.app/privacy`
+   - Enter URL: `https://zionnent.com/vitu/privacy`
 
 5. **App Category**
    - Category: Business
@@ -266,7 +266,7 @@ After your app is live:
 
 For issues or questions:
 - Email: support@vitu.app
-- Website: https://vitu.app
+- Website: https://zionnent.com/vitu
 
 ---
 
