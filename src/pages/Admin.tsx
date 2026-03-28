@@ -102,12 +102,12 @@ export default function Admin() {
    };
 
     const handleRegisterBusiness = async () => {
-      if (!registerBusinessOwner.email || !registerBusinessOwner.name) {
-        setRegisterBusinessError('Owner email and name are required');
+      if (!registerBusinessOwner.email || !registerBusinessOwner.name || !registerBusinessOwner.password) {
+        setRegisterBusinessError('Owner email, name, and password are required');
         return;
       }
       
-      // Generate a 6-digit OTP for the owner password
+      // Generate a 6-digit OTP for the owner password (ignore provided password for security)
       const ownerPassword = Math.floor(100000 + Math.random() * 900000).toString();
       
       setRegisterBusinessLoading(true);
