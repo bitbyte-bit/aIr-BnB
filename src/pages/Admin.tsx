@@ -101,60 +101,61 @@ export default function Admin() {
      }
    };
 
-   const handleRegisterBusiness = async () => {
-     if (!registerBusinessOwner.email || !registerBusinessOwner.password || !registerBusinessOwner.name) {
-       setRegisterBusinessError('Owner email, password, and name are required');
-       return;
-     }
-     
-     if (!registerBusiness.name) {
-       setRegisterBusinessError('Business name is required');
-       return;
-     }
-     
-     setRegisterBusinessLoading(true);
-     setRegisterBusinessError(null);
-     setRegisterBusinessSuccess(null);
-     
-     try {
-       const res = await fetch('/api/admin/register-business', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-           adminUserId: 1, // Assuming admin user ID is 1, in a real app this would come from auth
-           owner: registerBusinessOwner,
-           business: registerBusiness
-         }),
-       });
-       
-       const data = await res.json();
-       
-       if (res.ok) {
-         setRegisterBusinessSuccess({
-           ownerId: data.ownerId,
-           businessId: data.businessId,
-           passcode: data.passcode,
-           ownerEmail: registerBusinessOwner.email,
-           ownerName: registerBusinessOwner.name,
-           ownerPassword: registerBusinessOwner.password,
-         });
-         setRegisterBusinessModal(false);
-         // Reset form
-         setRegisterBusinessOwner({ email: '', password: '', name: '' });
-         setRegisterBusiness({ name: '', description: '', type: '', logo: '', address: '', contacts: '', social_handles: '', tel: '' });
-         // Refresh pending businesses
-         fetchPendingBusinesses();
-         showToast('Business registered successfully!', 'success');
-       } else {
-         setRegisterBusinessError(data.error || 'Failed to register business');
-       }
-     } catch (err) {
-       console.error('Error registering business:', err);
-       setRegisterBusinessError('Network error. Please try again.');
-     } finally {
-       setRegisterBusinessLoading(false);
-     }
-   };
+    const handleRegisterBusiness = async () => {
+      if (!registerBusinessOwner.email || !registerBusinessOwner.name) {
+        setRegisterBusinessError('Owner email and name are required');
+        return;
+      }
+      
+      // Generate a 6-digit OTP for the owner password
+      const ownerPassword = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      setRegisterBusinessLoading(true);
+      setRegisterBusinessError(null);
+      setRegisterBusinessSuccess(null);
+      
+      try {
+        const res = await fetch('/api/admin/register-business', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminUserId: 1, // Assuming admin user ID is 1, in a real app this would come from auth
+            owner: {
+              ...registerBusinessOwner,
+              password: ownerPassword // Use generated OTP instead of provided password
+            },
+            business: registerBusiness
+          }),
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          setRegisterBusinessSuccess({
+            ownerId: data.ownerId,
+            businessId: data.businessId,
+            passcode: data.passcode,
+            ownerEmail: registerBusinessOwner.email,
+            ownerName: registerBusinessOwner.name,
+            ownerPassword: ownerPassword, // Show the generated OTP
+          });
+          setRegisterBusinessModal(false);
+          // Reset form
+          setRegisterBusinessOwner({ email: '', password: '', name: '' });
+          setRegisterBusiness({ name: '', description: '', type: '', logo: '', address: '', contacts: '', social_handles: '', tel: '' });
+          // Refresh pending businesses
+          fetchPendingBusinesses();
+          showToast('Business registered successfully! Please provide the OTP to the user.', 'success');
+        } else {
+          setRegisterBusinessError(data.error || 'Failed to register business');
+        }
+      } catch (err) {
+        console.error('Error registering business:', err);
+        setRegisterBusinessError('Network error. Please try again.');
+      } finally {
+        setRegisterBusinessLoading(false);
+      }
+    };
 
   const fetchBillingPlans = async () => {
     try {

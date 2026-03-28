@@ -53,16 +53,18 @@ export default function PasswordChangeModal({ isOpen, onClose, userId, userName 
         })
       });
 
-      if (res.ok) {
-        setSuccess(true);
-        setTimeout(() => {
-          onClose();
-          setSuccess(false);
-          setCurrentPassword('');
-          setNewPassword('');
-          setConfirmPassword('');
-        }, 2000);
-      } else {
+       if (res.ok) {
+         setSuccess(true);
+         setTimeout(() => {
+           onClose();
+           setSuccess(false);
+           setCurrentPassword('');
+           setNewPassword('');
+           setConfirmPassword('');
+           // Redirect to business page after successful password change
+           window.location.href = '/business';
+         }, 2000);
+       } else {
         const data = await res.json();
         setError(data.error || 'Failed to change password');
       }
