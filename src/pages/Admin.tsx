@@ -29,7 +29,7 @@ interface UserDetails {
 }
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending'>('analytics');
   const { showToast } = useToast();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -46,32 +46,101 @@ export default function Admin() {
     gallery: [] as string[],
     customFields: [] as { key: string; value: string }[]
   });
+  const [pendingBusinesses, setPendingBusinesses] = useState<any[]>([]);
+  const [registerBusinessModal, setRegisterBusinessModal] = useState(false);
+  const [registerBusinessOwner, setRegisterBusinessOwner] = useState({ email: '', password: '', name: '' });
+  const [registerBusiness, setRegisterBusiness] = useState({ name: '', description: '', type: '', logo: '', address: '', contacts: '', social_handles: '', tel: '' });
+  const [registerBusinessLoading, setRegisterBusinessLoading] = useState(false);
+  const [registerBusinessError, setRegisterBusinessError] = useState<string | null>(null);
+  const [registerBusinessSuccess, setRegisterBusinessSuccess] = useState<{ ownerId: number; businessId: number; passcode: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchAnalytics();
-    fetchUsers();
-    fetchBusinesses();
-    if (activeTab === 'billing') {
-      fetchBillingPlans();
-    }
-    if (activeTab === 'subscriptions') {
-      fetchPendingSubscriptions();
-    }
-  }, [activeTab]);
+   useEffect(() => {
+     fetchAnalytics();
+     fetchUsers();
+     fetchBusinesses();
+     if (activeTab === 'billing') {
+       fetchBillingPlans();
+     }
+     if (activeTab === 'subscriptions') {
+       fetchPendingSubscriptions();
+     }
+     if (activeTab === 'businesses') {
+       fetchPendingBusinesses();
+     }
+   }, [activeTab]);
 
-  const fetchAnalytics = async () => {
-    try {
-      const res = await fetch('/api/admin/analytics');
-      if (!res.ok) throw new Error('Failed to fetch analytics');
-      const data = await res.json();
-      setAnalytics(data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+   const fetchAnalytics = async () => {
+     try {
+       const res = await fetch('/api/admin/analytics');
+       if (!res.ok) throw new Error('Failed to fetch analytics');
+       const data = await res.json();
+       setAnalytics(data);
+     } catch (err) {
+       console.error(err);
+     } finally {
+       setLoading(false);
+     }
+   };
+
+   const fetchPendingBusinesses = async () => {
+     try {
+       const res = await fetch('/api/admin/pending-businesses');
+       if (!res.ok) throw new Error('Failed to fetch pending businesses');
+       const data = await res.json();
+       setPendingBusinesses(data);
+     } catch (err) {
+       console.error('Error fetching pending businesses:', err);
+     }
+   };
+
+   const handleRegisterBusiness = async () => {
+     if (!registerBusinessOwner.email || !registerBusinessOwner.password || !registerBusinessOwner.name) {
+       setRegisterBusinessError('Owner email, password, and name are required');
+       return;
+     }
+     
+     if (!registerBusiness.name) {
+       setRegisterBusinessError('Business name is required');
+       return;
+     }
+     
+     setRegisterBusinessLoading(true);
+     setRegisterBusinessError(null);
+     setRegisterBusinessSuccess(null);
+     
+     try {
+       const res = await fetch('/api/admin/register-business', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           adminUserId: 1, // Assuming admin user ID is 1, in a real app this would come from auth
+           owner: registerBusinessOwner,
+           business: registerBusiness
+         }),
+       });
+       
+       const data = await res.json();
+       
+       if (res.ok) {
+         setRegisterBusinessSuccess(data);
+         setRegisterBusinessModal(false);
+         // Reset form
+         setRegisterBusinessOwner({ email: '', password: '', name: '' });
+         setRegisterBusiness({ name: '', description: '', type: '', logo: '', address: '', contacts: '', social_handles: '', tel: '' });
+         // Refresh pending businesses
+         fetchPendingBusinesses();
+         showToast('Business registered successfully!', 'success');
+       } else {
+         setRegisterBusinessError(data.error || 'Failed to register business');
+       }
+     } catch (err) {
+       console.error('Error registering business:', err);
+       setRegisterBusinessError('Network error. Please try again.');
+     } finally {
+       setRegisterBusinessLoading(false);
+     }
+   };
 
   const fetchBillingPlans = async () => {
     try {

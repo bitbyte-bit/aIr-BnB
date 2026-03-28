@@ -16,46 +16,55 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
   const [verificationSent, setVerificationSent] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [forgotPasswordSent, setForgotPasswordSent] = useState(false);
+  const [requiresPasscode, setRequiresPasscode] = useState(false);
+  const [passcode, setPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState('');
   const { showToast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
-    const body = isLogin ? { email, password } : { email, password, name };
-
-    try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-
-      if (res.ok) {
-        if (!isLogin) {
-          // Signup - show verification message
-          setVerificationSent(true);
-          setError('');
-        } else {
-          onLogin(data);
-        }
-      } else {
-        // Check if user needs verification
-        if (data.needsVerification) {
-          setError(data.error);
-        } else {
-          setError(data.error || 'Something went wrong');
-        }
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setError('');
+     setPasscodeError('');
+     setLoading(true);
+ 
+     const endpoint = isLogin ? '/api/auth/login' : '/api/auth/signup';
+     const body = isLogin ? { email, password, passcode: requiresPasscode ? passcode : undefined } : { email, password, name };
+ 
+     try {
+       const res = await fetch(endpoint, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify(body),
+       });
+       const data = await res.json();
+ 
+       if (res.ok) {
+         if (!isLogin) {
+           // Signup - show verification message
+           setVerificationSent(true);
+           setError('');
+         } else {
+           onLogin(data);
+           // Store user in localStorage
+           localStorage.setItem('user', JSON.stringify(data));
+         }
+       } else {
+         // Check if user needs verification
+         if (data.needsVerification) {
+           setError(data.error);
+         } else if (data.requiresPasscode) {
+           setRequiresPasscode(true);
+           setError('Passcode is required');
+         } else {
+           setError(data.error || 'Something went wrong');
+         }
+       }
+     } catch (err) {
+       setError('Network error. Please try again.');
+     } finally {
+       setLoading(false);
+     }
+   };
 
   const handleResendVerification = async () => {
     if (!email) {
@@ -182,14 +191,36 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
               Enter your email address and we'll send you a link to reset your password.
             </p>
             
-            {error && (
-              <div className="mb-6">
-                <div className="p-4 bg-red-50 text-red-600 text-sm font-medium rounded-2xl border border-red-100 flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              </div>
-            )}
+             {error && (
+               <div className="mb-6">
+                 <div className="p-4 bg-red-50 text-red-600 text-sm font-medium rounded-2xl border border-red-100 flex items-start gap-2">
+                   <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                   <span>{error}</span>
+                 </div>
+               </div>
+             )}
+             {requiresPasscode && (
+               <div className="mb-6">
+                 <div className="relative">
+                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
+                   <input
+                     type="password"
+                     placeholder="Enter passcode"
+                     value={passcode}
+                     onChange={(e) => {
+                       setPasscode(e.target.value);
+                       setPasscodeError('');
+                     }}
+                     className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                   />
+                 </div>
+                 {passcodeError && (
+                   <div className="mt-2 p-2 bg-red-50 text-red-600 text-sm font-medium rounded-xl">
+                     <AlertCircle className="w-4 h-4 flex-shrink-0" /> {passcodeError}
+                   </div>
+                 )}
+               </div>
+             )}
 
             <div className="space-y-4">
               <div className="relative">
@@ -270,36 +301,49 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
                   className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                 />
               </div>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
-                {!isLogin ? (
-                  <div className="pt-2">
-                    <PasswordInput
-                      value={password}
-                      onChange={setPassword}
-                      placeholder="Password"
-                    />
-                  </div>
-                ) : (
-                  <input
-                    type="password"
-                    placeholder="Password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                  />
-                )}
-              </div>
+               <div className="relative">
+                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
+                 {!isLogin ? (
+                   <div className="pt-2">
+                     <PasswordInput
+                       value={password}
+                       onChange={setPassword}
+                       placeholder="Password"
+                     />
+                   </div>
+                 ) : (
+                   requiresPasscode ? (
+                     <input
+                       type="password"
+                       placeholder="Enter passcode"
+                       value={passcode}
+                       onChange={(e) => {
+                         setPasscode(e.target.value);
+                         setPasscodeError('');
+                       }}
+                       className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                     />
+                   ) : (
+                     <input
+                       type="password"
+                       placeholder="Password"
+                       required
+                       value={password}
+                       onChange={(e) => setPassword(e.target.value)}
+                       className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                     />
+                   )
+                 )}
+               </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {loading ? 'Processing...' : isLogin ? 'Sign In' : 'Create Account'}
-                {!loading && <ArrowRight size={20} />}
-              </button>
+               <button
+                 type="submit"
+                 disabled={loading}
+                 className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+               >
+                 {loading ? 'Processing...' : requiresPasscode ? 'Verify Passcode' : isLogin ? 'Sign In' : 'Create Account'}
+                 {!loading && <ArrowRight size={20} />}
+               </button>
             </form>
 
             <div className="mt-8 text-center">

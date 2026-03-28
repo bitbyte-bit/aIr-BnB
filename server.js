@@ -438,6 +438,8 @@ try { db.exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); } catch (
 try { db.exec("ALTER TABLE users ADD COLUMN verification_expires DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN reset_token TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN reset_expires DATETIME"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN temp_password TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE users ADD COLUMN temp_password_expires DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN gallery TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN custom_fields TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN business_id INTEGER REFERENCES businesses(id)"); } catch (e) {}
@@ -447,6 +449,11 @@ try { db.exec("ALTER TABLE businesses ADD COLUMN contacts TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN social_handles TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN tel TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE businesses ADD COLUMN type TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN national_id_front TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN national_id_back TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN nin_number TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN owners_pic TEXT"); } catch (e) {}
+try { db.exec("ALTER TABLE businesses ADD COLUMN alternative_phone_number TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE messages ADD COLUMN is_read INTEGER DEFAULT 0"); } catch (e) {}
 try { db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_likes_user_item ON likes(user_id, item_id)"); } catch (e) {}
 try { db.exec("ALTER TABLE likes ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP"); } catch (e) {}
@@ -500,9 +507,18 @@ async function startServer() {
     },
   });
 
-  app.use(express.json({ limit: '50mb' }));
-
-  // Request logger
+   app.use(express.json({ limit: '50mb' }));
+   const fileUpload = require('express-fileupload');
+   app.use(fileUpload({
+     createParentPath: true,
+     limits: { 
+       fileSize: 50 * 1024 * 1024 // 50 MB max file size
+     },
+     abortOnLimit: true,
+     responseOnLimit: 'File size limit exceeded'
+   }));
+   
+   // Request logger
   app.use((req, res, next) => {
     const start = Date.now();
     res.on('finish', () => {
@@ -620,46 +636,69 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/login", async (req, res) => {
-    const { email, password } = req.body;
-    const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
-    
-    if (!user) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-    
-    // Verify password
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    
-    if (!isValidPassword) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
-    
-    // Check if email is verified
-    if (!user.is_verified) {
-      return res.status(403).json({ 
-        error: "Please verify your email before logging in",
-        needsVerification: true,
-        email: user.email
-      });
-    }
-    
-    if (user.status === 'suspended' || user.status === 'banned') {
-      return res.status(403).json({ error: `Your account is ${user.status}.` });
-    }
-    
-    const business = db.prepare("SELECT id FROM businesses WHERE owner_id = ?").get(user.id);
-    res.json({ 
-      id: user.id, 
-      email: user.email, 
-      name: user.name, 
-      role: user.role, 
-      bio: user.bio, 
-      profile_picture: user.profile_picture,
-      status: user.status,
-      business_id: business?.id
-    });
-  });
+   app.post("/api/auth/login", async (req, res) => {
+     const { email, password, passcode } = req.body;
+     const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+     
+     if (!user) {
+       return res.status(401).json({ error: "Invalid credentials" });
+     }
+     
+     // Verify password
+     const isValidPassword = await bcrypt.compare(password, user.password);
+     
+     if (!isValidPassword) {
+       return res.status(401).json({ error: "Invalid credentials" });
+     }
+     
+     // Check if user has a business and has a temporary passcode set
+     const business = db.prepare("SELECT id FROM businesses WHERE owner_id = ?").get(user.id);
+     if (business && user.temp_password) {
+       // Check if temp_password is expired
+       if (user.temp_password_expires && new Date(user.temp_password_expires) < new Date()) {
+         // Expired, clear the temp_password and temp_password_expires
+         db.prepare("UPDATE users SET temp_password = NULL, temp_password_expires = NULL WHERE id = ?").run(user.id);
+         return res.status(400).json({ error: "Passcode has expired. Please request a new one from the admin." });
+       }
+
+       // Verify the passcode
+       if (!passcode) {
+         return res.status(400).json({ error: "Passcode is required", requiresPasscode: true });
+       }
+
+       const isValidPasscode = await bcrypt.compare(passcode, user.temp_password);
+       if (!isValidPasscode) {
+         return res.status(400).json({ error: "Invalid passcode" });
+       }
+
+       // Passcode is valid, clear it so it can't be used again
+       db.prepare("UPDATE users SET temp_password = NULL, temp_password_expires = NULL WHERE id = ?").run(user.id);
+     }
+     
+     // Check if email is verified
+     if (!user.is_verified) {
+       return res.status(403).json({ 
+         error: "Please verify your email before logging in",
+         needsVerification: true,
+         email: user.email
+       });
+     }
+     
+     if (user.status === 'suspended' || user.status === 'banned') {
+       return res.status(403).json({ error: `Your account is ${user.status}.` });
+     }
+     
+     res.json({ 
+       id: user.id, 
+       email: user.email, 
+       name: user.name, 
+       role: user.role, 
+       bio: user.bio, 
+       profile_picture: user.profile_picture,
+       status: user.status,
+       business_id: business?.id
+     });
+   });
 
   // Email verification endpoint
   app.post("/api/auth/verify-email", (req, res) => {
@@ -914,9 +953,9 @@ async function startServer() {
   app.get("/api/businesses/:id", (req, res) => {
     const business = db.prepare(`
       SELECT *, (SELECT COUNT(*) FROM follows WHERE business_id = businesses.id) as followers_count
-      FROM businesses WHERE id = ?
+      FROM businesses WHERE id = ? AND is_approved = 1
     `).get(req.params.id);
-    res.json(business);
+    res.json(business || null);
   });
 
   app.get("/api/business-types", (req, res) => {
@@ -960,21 +999,22 @@ async function startServer() {
   });
 
   // Items Routes
-  app.get("/api/items", (req, res) => {
-    const items = db.prepare(`
-      SELECT items.*, businesses.name as business_name, businesses.is_approved,
-      (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
-      (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments_count,
-      (SELECT COUNT(*) FROM shares WHERE item_id = items.id) as shares_count,
-      (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
-      (SELECT bs.status FROM business_subscriptions bs WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_status,
-      (SELECT bp.name FROM business_subscriptions bs JOIN billing_plans bp ON bs.plan_id = bp.id WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_plan
-      FROM items 
-      LEFT JOIN businesses ON items.business_id = businesses.id 
-      ORDER BY created_at DESC
-    `).all();
-    res.json(items);
-  });
+   app.get("/api/items", (req, res) => {
+     const items = db.prepare(`
+       SELECT items.*, businesses.name as business_name, businesses.is_approved,
+       (SELECT COUNT(*) FROM likes WHERE item_id = items.id) as likes,
+       (SELECT COUNT(*) FROM comments WHERE item_id = items.id) as comments_count,
+       (SELECT COUNT(*) FROM shares WHERE item_id = items.id) as shares_count,
+       (SELECT COUNT(*) FROM follows WHERE business_id = items.business_id) as followers_count,
+       (SELECT bs.status FROM business_subscriptions bs WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_status,
+       (SELECT bp.name FROM business_subscriptions bs JOIN billing_plans bp ON bs.plan_id = bp.id WHERE bs.business_id = items.business_id AND bs.status = 'active' ORDER BY bs.created_at DESC LIMIT 1) as subscription_plan
+       FROM items 
+       LEFT JOIN businesses ON items.business_id = businesses.id 
+       WHERE businesses.is_approved = 1
+       ORDER BY created_at DESC
+     `).all();
+     res.json(items);
+   });
 
   // Get single item by ID
   app.get("/api/items/:id", (req, res) => {
@@ -1057,6 +1097,11 @@ async function startServer() {
 
   app.get("/api/businesses/:id/items", (req, res) => {
     try {
+      // Check if business is approved
+      const business = db.prepare("SELECT is_approved FROM businesses WHERE id = ?").get(req.params.id);
+      if (!business || business.is_approved !== 1) {
+        return res.status(403).json({ error: "Business is not approved" });
+      }
       const items = db.prepare("SELECT * FROM items WHERE business_id = ? ORDER BY created_at DESC").all(req.params.id);
       res.json(items);
     } catch (err) {
@@ -1450,15 +1495,272 @@ async function startServer() {
     }
   });
 
-  // Admin Routes
-  app.get("/api/admin/users", (req, res) => {
-    const users = db.prepare(`
-      SELECT users.id, users.email, users.name, users.role, users.status, users.bio, users.profile_picture, businesses.id as business_id, businesses.name as business_name
-      FROM users
-      LEFT JOIN businesses ON users.id = businesses.owner_id
-    `).all();
-    res.json(users);
-  });
+   // Admin Routes
+   app.get("/api/admin/users", (req, res) => {
+     const users = db.prepare(`
+       SELECT users.id, users.email, users.name, users.role, users.status, users.bio, users.profile_picture, businesses.id as business_id, businesses.name as business_name
+       FROM users
+       LEFT JOIN businesses ON users.id = businesses.owner_id
+     `).all();
+     res.json(users);
+   });
+
+   // Admin register business with passcode generation
+   app.post("/api/admin/register-business", async (req, res) => {
+     const { adminUserId, owner, business } = req.body;
+     
+     // Validate admin user
+     const admin = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'admin'").get(adminUserId);
+     if (!admin) {
+       return res.status(403).json({ error: "Admin privileges required" });
+     }
+     
+     // Validate owner
+     if (!owner || !owner.email || !owner.password || !owner.name) {
+       return res.status(400).json({ error: "Owner email, password, and name are required" });
+     }
+     
+     // Validate business
+     if (!business || !business.name) {
+       return res.status(400).json({ error: "Business name is required" });
+     }
+     
+     try {
+       // Check if owner email already exists
+       const existingUser = db.prepare("SELECT * FROM users WHERE email = ?").get(owner.email);
+       if (existingUser) {
+         return res.status(400).json({ error: "Email already exists" });
+       }
+       
+       // Hash owner password
+       const saltRounds = 10;
+       const hashedPassword = await bcrypt.hash(owner.password, saltRounds);
+       
+       // Generate 6-digit passcode
+       const passcode = Math.floor(100000 + Math.random() * 900000).toString();
+       const passcodeHash = await bcrypt.hash(passcode, saltRounds);
+       
+       // Set passcode expiration (1 hour)
+       const passcodeExpires = new Date(Date.now() + 60 * 60 * 1000);
+       
+       // Insert owner user
+       const userStmt = db.prepare(`
+         INSERT INTO users (email, password, name, role, is_verified, temp_password, temp_password_expires)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+       `);
+       const userInfo = userStmt.run(
+         owner.email,
+         hashedPassword,
+         owner.name,
+         'user',
+         1, // is_verified (no email verification required)
+         passcodeHash,
+         passcodeExpires.toISOString()
+       );
+       
+       const ownerId = userInfo.lastInsertRowid;
+       
+       // Insert business
+       const businessStmt = db.prepare(`
+         INSERT INTO businesses (owner_id, name, description, type, logo, address, contacts, social_handles, tel)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       `);
+       const businessInfo = businessStmt.run(
+         ownerId,
+         business.name,
+         business.description || null,
+         business.type || null,
+         business.logo || null,
+         business.address || null,
+         business.contacts || null,
+         business.social_handles || null,
+         business.tel || null
+       );
+       
+       const businessId = businessInfo.lastInsertRowid;
+       
+       res.json({
+         success: true,
+         message: "Business registered successfully",
+         ownerId,
+         businessId,
+         passcode: passcode // Return plain passcode to admin (to be shown once)
+       });
+     } catch (err) {
+       console.error("Error registering business:", err);
+       res.status(500).json({ error: "Failed to register business" });
+     }
+   });
+
+   // Admin endpoint to view pending business documents for approval
+   app.get("/api/admin/pending-businesses", (req, res) => {
+     try {
+       const businesses = db.prepare(`
+         SELECT b.id, b.name, b.description, b.logo, b.address, b.contacts, b.social_handles, b.tel, b.type,
+                b.national_id_front, b.national_id_back, b.nin_number, b.owners_pic, b.alternative_phone_number,
+                u.id as owner_id, u.email as owner_email, u.name as owner_name
+         FROM businesses b
+         JOIN users u ON b.owner_id = u.id
+         WHERE b.is_approved = 0
+         ORDER BY b.created_at DESC
+       `).all();
+       
+       res.json(businesses);
+     } catch (err) {
+       console.error("Error fetching pending businesses:", err);
+       res.status(500).json({ error: "Failed to fetch pending businesses" });
+     }
+   });
+
+   // Admin endpoint to approve a business
+   app.patch("/api/admin/approve-business/:id", (req, res) => {
+     const { id } = req.params;
+     
+     try {
+       const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(id);
+       if (!business) {
+         return res.status(404).json({ error: "Business not found" });
+       }
+       
+       db.prepare("UPDATE businesses SET is_approved = 1 WHERE id = ?").run(id);
+       
+       res.json({
+         success: true,
+         message: "Business approved successfully"
+       });
+     } catch (err) {
+       console.error("Error approving business:", err);
+       res.status(500).json({ error: "Failed to approve business" });
+     }
+   });
+
+   // Admin endpoint to reject a business
+   app.patch("/api/admin/reject-business/:id", (req, res) => {
+     const { id } = req.params;
+     
+     try {
+       const business = db.prepare("SELECT * FROM businesses WHERE id = ?").get(id);
+       if (!business) {
+         return res.status(404).json({ error: "Business not found" });
+       }
+       
+       // Optionally, you could delete the business or mark it as rejected
+       // For now, we'll just leave it as unapproved (is_approved = 0)
+       res.json({
+         success: true,
+         message: "Business rejected (left as unapproved)"
+       });
+     } catch (err) {
+       console.error("Error rejecting business:", err);
+       res.status(500).json({ error: "Failed to reject business" });
+     }
+   });
+
+   // Business document upload endpoint (after login)
+   app.post("/api/business/upload-documents", async (req, res) => {
+     const { userId } = req.body;
+     
+     // Validate user
+     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+     if (!user) {
+       return res.status(404).json({ error: "User not found" });
+     }
+     
+     // Check if user has a business
+     const business = db.prepare("SELECT * FROM businesses WHERE owner_id = ?").get(userId);
+     if (!business) {
+       return res.status(404).json({ error: "Business not found for this user" });
+     }
+     
+     try {
+       // Handle file uploads
+       const files = req.files;
+       if (!files) {
+         return res.status(400).json({ error: "No files uploaded" });
+       }
+       
+       // Define allowed file types
+       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+       
+       // Process each document type
+       const documentTypes = [
+         'nationalIdFront',
+         'nationalIdBack', 
+         'ninNumber',
+         'businessLogo',
+         'location',
+         'businessType',
+         'ownersPic',
+         'telephone',
+         'alternativePhoneNumber'
+       ];
+       
+       const uploadedDocuments = {};
+       
+       for (const docType of documentTypes) {
+         if (files[docType]) {
+           const file = files[docType];
+           
+           // Validate file type
+           if (!allowedTypes.includes(file.mimetype)) {
+             return res.status(400).json({ error: `Invalid file type for ${docType}. Only JPEG/PNG allowed.` });
+           }
+           
+           // Create uploads directory if it doesn't exist
+           const uploadDir = path.join(__dirname, 'uploads', 'business-documents');
+           if (!fs.existsSync(uploadDir)) {
+             fs.mkdirSync(uploadDir, { recursive: true });
+           }
+           
+           // Generate unique filename
+           const fileName = `${userId}_${docType}_${Date.now()}${path.extname(file.name)}`;
+           const filePath = path.join(uploadDir, fileName);
+           
+           // Move file to uploads directory
+           await file.mv(filePath);
+           
+           // Store relative path for database
+           uploadedDocuments[docType] = `/uploads/business-documents/${fileName}`;
+         }
+       }
+       
+       // Update business with document paths
+       const updateFields = [];
+       const updateValues = [];
+       
+       for (const [key, value] of Object.entries(uploadedDocuments)) {
+         // Map document types to database columns
+         let dbColumn = key;
+         if (key === 'nationalIdFront') dbColumn = 'national_id_front';
+         else if (key === 'nationalIdBack') dbColumn = 'national_id_back';
+         else if (key === 'ninNumber') dbColumn = 'nin_number';
+         else if (key === 'businessLogo') dbColumn = 'logo';
+         else if (key === 'location') dbColumn = 'address';
+         else if (key === 'businessType') dbColumn = 'type';
+         else if (key === 'ownersPic') dbColumn = 'owners_pic';
+         else if (key === 'telephone') dbColumn = 'tel';
+         else if (key === 'alternativePhoneNumber') dbColumn = 'alternative_phone_number';
+         
+         updateFields.push(`${dbColumn} = ?`);
+         updateValues.push(value);
+       }
+       
+       if (updateFields.length > 0) {
+         updateValues.push(userId);
+         const updateQuery = `UPDATE businesses SET ${updateFields.join(', ')} WHERE owner_id = ?`;
+         db.prepare(updateQuery).run(...updateValues);
+       }
+       
+       res.json({
+         success: true,
+         message: "Documents uploaded successfully",
+         documents: uploadedDocuments
+       });
+     } catch (err) {
+       console.error("Error uploading documents:", err);
+       res.status(500).json({ error: "Failed to upload documents" });
+     }
+   });
 
   // Get all users (for inbox/chat)
   app.get("/api/users/all", (req, res) => {
