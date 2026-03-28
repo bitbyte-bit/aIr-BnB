@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, ArrowRight, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
 import { User as UserType } from '../types';
@@ -288,98 +288,139 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-               {!isLogin && (
-                 <>
-                   <div className="relative">
-                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-                     <input
-                       type="text"
-                       placeholder="Full Name"
-                       required
-                       value={name}
-                       onChange={(e) => setName(e.target.value)}
-                       className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                     />
-                   </div>
-                   <div className="relative">
-                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-                     <input
-                       type="email"
-                       placeholder="Email Address"
-                       required
-                       value={email}
-                       onChange={(e) => setEmail(e.target.value)}
-                       className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                     />
-                   </div>
-                   {!requiresPasscode && (
-                     <div className="relative">
-                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
-                       <div className="pt-2">
-                         <PasswordInput
-                           value={password}
-                           onChange={setPassword}
-                           placeholder="Password (optional - will be provided by admin)"
-                         />
-                       </div>
-                     </div>
-                   )}
-                 </>
-               )}
-               <div className="relative">
-                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-                 <input
-                   type="email"
-                   placeholder="Email Address"
-                   required
-                   value={email}
-                   onChange={(e) => setEmail(e.target.value)}
-                   className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                 />
-               </div>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
-                  {!isLogin ? (
-                    <div className="pt-2">
-                      <PasswordInput
-                        value={password}
-                        onChange={setPassword}
-                        placeholder="Password"
+                {!isLogin && (
+                  <>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
+                      <input
+                        type="text"
+                        placeholder="Full Name"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                       />
                     </div>
-                  ) : (
-                    requiresPasscode ? (
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
                       <input
-                        type="password"
-                        placeholder="Enter passcode"
-                        value={passcode}
-                        onChange={(e) => {
-                          setPasscode(e.target.value);
-                          setPasscodeError('');
-                        }}
-                        className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                      />
-                    ) : (
-                      <input
-                        type="password"
-                        placeholder="Password"
+                        type="email"
+                        placeholder="Email Address"
                         required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                         className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                       />
-                    )
-                  )}
+                    </div>
+                    {!requiresPasscode && (
+                      <div className="relative">
+                        <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
+                        <div className="pt-2">
+                          <PasswordInput
+                            value={password}
+                            onChange={setPassword}
+                            placeholder="Password (optional - will be provided by admin)"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
+                  <input
+                    type="email"
+                    placeholder="Email Address"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                  />
                 </div>
+                 <div className="relative">
+                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
+                   {!isLogin ? (
+                     <div className="pt-2">
+                       <PasswordInput
+                         value={password}
+                         onChange={setPassword}
+                         placeholder="Password"
+                       />
+                     </div>
+                   ) : (
+                     requiresPasscode ? (
+                       <input
+                         type="password"
+                         placeholder="Enter passcode"
+                         value={passcode}
+                         onChange={(e) => {
+                           setPasscode(e.target.value);
+                           setPasscodeError('');
+                         }}
+                         className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                       />
+                     ) : (
+                       <input
+                         type="password"
+                         placeholder="Password"
+                         required
+                         value={password}
+                         onChange={(e) => setPassword(e.target.value)}
+                         className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+                       />
+                     )
+                   )}
+                 </div>
+                 
+                 {/* Google Sign-In Button */}
+                 <div className="relative">
+                   <button
+                     onClick={handleGoogleSignIn}
+                     disabled={loading}
+                     className="w-full py-4 bg-white text-neutral-700 font-bold rounded-xl hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                   >
+                     {loading ? (
+                       <>
+                         <Loader2 size={20} className="animate-spin" />
+                         Signing in with Google...
+                       </>
+                     ) : (
+                       <>
+                         <Google size={20} className="mr-2" />
+                         Sign in with Google
+                       </>
+                     )}
+                   </button>
+                 </div>
 
-               <button
-                 type="submit"
-                 disabled={loading}
-                 className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-               >
-                 {loading ? 'Processing...' : requiresPasscode ? 'Verify Passcode' : isLogin ? 'Sign In' : 'Create Account'}
-                 {!loading && <ArrowRight size={20} />}
-               </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : requiresPasscode ? 'Verify Passcode' : isLogin ? 'Sign In' : 'Create Account'}
+                  {!loading && <ArrowRight size={20} />}
+                </button>
+                
+                {/* Google Sign-In Button */}
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={loading}
+                  className="w-full py-4 bg-white text-neutral-700 font-bold rounded-xl hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      Signing in with Google...
+                    </>
+                  ) : (
+                    <>
+                      {/* Using 'Mail' as placeholder for Google icon since 'Google' icon is not available in lucide-react */}
+                      <Mail size={20} className="mr-2" />
+                      Sign in with Google
+                    </>
+                  )}
+                </button>
             </form>
 
             <div className="mt-8 text-center">
