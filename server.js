@@ -11,6 +11,7 @@ import dotenv from 'dotenv';
 import webpush from 'web-push';
 import bcrypt from 'bcryptjs';
 import nodemailer from 'nodemailer';
+import fileUpload from 'express-fileupload';
 
 // Load environment variables
 dotenv.config();
@@ -508,7 +509,6 @@ async function startServer() {
   });
 
    app.use(express.json({ limit: '50mb' }));
-   const fileUpload = require('express-fileupload');
    app.use(fileUpload({
      createParentPath: true,
      limits: { 
