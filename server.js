@@ -23,7 +23,7 @@ const vapidKeys = {
 
 // Configure web-push
 webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT || 'mailto:admin@vitu.app',
+  process.env.VAPID_SUBJECT || ' ',
   vapidKeys.publicKey,
   vapidKeys.privateKey
 );
@@ -61,7 +61,7 @@ if (emailConfig.auth.user && emailConfig.auth.pass) {
 
 // Function to send verification email
 async function sendVerificationEmail(email, name, token) {
-  const appUrl = process.env.APP_URL || 'https://zionnent.com';
+  const appUrl = process.env.APP_URL || 'https://vitu.onrender.com';
   const verificationUrl = `${appUrl}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
   
   const mailOptions = {
@@ -96,7 +96,7 @@ async function sendVerificationEmail(email, name, token) {
 
 // Function to send password reset email
 async function sendPasswordResetEmail(email, name, token) {
-  const appUrl = process.env.APP_URL || 'https://zionnent.com';
+  const appUrl = process.env.APP_URL || 'https://vitu.onrender.com';
   const resetUrl = `${appUrl}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
   
   const mailOptions = {
