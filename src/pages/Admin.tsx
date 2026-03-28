@@ -332,7 +332,7 @@ export default function Admin() {
           <p className="text-neutral-500">Manage your platform and community</p>
         </div>
         <div className="flex bg-neutral-100 p-1 rounded-2xl">
-          {(['analytics', 'users', 'businesses', 'billing', 'subscriptions'] as const).map((tab) => (
+          {(['analytics', 'users', 'businesses', 'billing', 'subscriptions', 'pending'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -602,82 +602,205 @@ export default function Admin() {
           </motion.div>
         )}
 
-        {activeTab === 'businesses' && (
-          <motion.div
-            key="businesses"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm overflow-hidden"
-          >
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-bottom border-neutral-100 bg-neutral-50">
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Business</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Performance</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Approval</th>
-                  <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                {businesses.map((b: any) => (
-                  <tr key={b.id} className="hover:bg-neutral-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-neutral-100 overflow-hidden shrink-0">
-                          {b.logo && <img src={b.logo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
-                        </div>
-                        <div>
-                          <div className="font-bold text-neutral-900">{b.name}</div>
-                          <div className="text-[10px] text-neutral-400 uppercase tracking-widest">{b.contacts}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex gap-4">
-                        <div className="text-center">
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Items</p>
-                          <p className="text-sm font-black text-neutral-900">{b.item_count || 0}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Followers</p>
-                          <p className="text-sm font-black text-emerald-600">{b.follower_count || 0}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Likes</p>
-                          <p className="text-sm font-black text-red-600">{b.like_count || 0}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      {b.is_approved ? (
-                        <span className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold uppercase tracking-widest">
-                          <CheckCircle size={14} /> Approved
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-neutral-400 text-[10px] font-bold uppercase tracking-widest">
-                          <Shield size={14} /> Pending
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        {!b.is_approved ? (
-                          <button onClick={() => handleApproveBusiness(b.id, true)} className="px-3 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 uppercase tracking-widest">Approve</button>
-                        ) : (
-                          <button onClick={() => handleApproveBusiness(b.id, false)} className="px-3 py-1 bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-lg hover:bg-neutral-300 uppercase tracking-widest">Revoke</button>
-                        )}
-                        <button onClick={() => handleDeleteBusiness(b.id)} className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </motion.div>
-        )}
-
-        {activeTab === 'billing' && (
+         {activeTab === 'businesses' && (
+           <motion.div
+             key="businesses"
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             exit={{ opacity: 0, y: -20 }}
+             className="bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm overflow-hidden"
+           >
+             <table className="w-full text-left">
+               <thead>
+                 <tr className="border-bottom border-neutral-100 bg-neutral-50">
+                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Business</th>
+                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Performance</th>
+                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Approval</th>
+                   <th className="px-6 py-4 text-xs font-bold text-neutral-400 uppercase tracking-widest">Actions</th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-neutral-100">
+                 {businesses.map((b: any) => (
+                   <tr key={b.id} className="hover:bg-neutral-50 transition-colors">
+                     <td className="px-6 py-4">
+                       <div className="flex items-center gap-3">
+                         <div className="w-10 h-10 rounded-xl bg-neutral-100 overflow-hidden shrink-0">
+                           {b.logo && <img src={b.logo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+                         </div>
+                         <div>
+                           <div className="font-bold text-neutral-900">{b.name}</div>
+                           <div className="text-[10px] text-neutral-400 uppercase tracking-widest">{b.contacts}</div>
+                         </div>
+                       </div>
+                     </td>
+                     <td className="px-6 py-4">
+                       <div className="flex gap-4">
+                         <div className="text-center">
+                           <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Items</p>
+                           <p className="text-sm font-black text-neutral-900">{b.item_count || 0}</p>
+                         </div>
+                         <div className="text-center">
+                           <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Followers</p>
+                           <p className="text-sm font-black text-emerald-600">{b.follower_count || 0}</p>
+                         </div>
+                         <div className="text-center">
+                           <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">Likes</p>
+                           <p className="text-sm font-black text-red-600">{b.like_count || 0}</p>
+                         </div>
+                       </div>
+                     </td>
+                     <td className="px-6 py-4">
+                       {b.is_approved ? (
+                         <span className="flex items-center gap-1 text-emerald-600 text-[10px] font-bold uppercase tracking-widest">
+                           <CheckCircle size={14} /> Approved
+                         </span>
+                       ) : (
+                         <span className="flex items-center gap-1 text-neutral-400 text-[10px] font-bold uppercase tracking-widest">
+                           <Shield size={14} /> Pending
+                         </span>
+                       )}
+                     </td>
+                     <td className="px-6 py-4">
+                       <div className="flex items-center gap-2">
+                         {!b.is_approved ? (
+                           <button onClick={() => handleApproveBusiness(b.id, true)} className="px-3 py-1 bg-emerald-600 text-white text-[10px] font-bold rounded-lg hover:bg-emerald-700 uppercase tracking-widest">Approve</button>
+                         ) : (
+                           <button onClick={() => handleApproveBusiness(b.id, false)} className="px-3 py-1 bg-neutral-200 text-neutral-600 text-[10px] font-bold rounded-lg hover:bg-neutral-300 uppercase tracking-widest">Revoke</button>
+                         )}
+                         <button onClick={() => handleDeleteBusiness(b.id)} className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Delete"><Trash2 size={16} /></button>
+                       </div>
+                     </td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+           </motion.div>
+         )}
+         {activeTab === 'pending' && (
+           <motion.div
+             key="pending"
+             initial={{ opacity: 0, y: 20 }}
+             animate={{ opacity: 1, y: 0 }}
+             exit={{ opacity: 0, y: -20 }}
+             className="bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm overflow-hidden"
+           >
+             <div className="space-y-6">
+               <h2 className="text-xl font-bold text-neutral-900">Pending Business Approvals</h2>
+               <p className="text-sm text-neutral-500">
+                 Review and approve businesses that have submitted documents for verification
+               </p>
+               {pendingBusinesses.length === 0 ? (
+                 <div className="p-12 bg-neutral-50 rounded-2xl border border-neutral-200 text-center">
+                   <CheckCircle size={48} className="mx-auto text-emerald-300 mb-4" />
+                   <p className="text-neutral-500">No pending businesses to review</p>
+                 </div>
+               ) : (
+                 <div className="space-y-4">
+                   {pendingBusinesses.map((business) => (
+                     <div key={business.id} className="p-6 bg-white rounded-2xl border border-neutral-200">
+                       <div className="flex items-start justify-between">
+                         <div className="flex-1">
+                           <h4 className="font-bold text-neutral-900">{business.name}</h4>
+                           <p className="text-sm text-neutral-500">
+                             Type: <span className="font-bold">{business.type || 'Not specified'}</span>
+                           </p>
+                           <p className="text-sm text-neutral-500">
+                             Location: <span className="font-bold">{business.address || 'Not specified'}</span>
+                           </p>
+                           <p className="text-xs text-neutral-400 mt-1">
+                             Submitted: {new Date(business.created_at).toLocaleDateString()}
+                           </p>
+                         </div>
+                         <div className="flex gap-2">
+                           <button
+                             onClick={() => handleApproveBusiness(business.id, true)}
+                             className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-1"
+                           >
+                             <CheckCircle size={16} />
+                             Approve
+                           </button>
+                           <button
+                             onClick={() => handleApproveBusiness(business.id, false)}
+                             className="px-4 py-2 bg-red-500 text-white text-sm font-bold rounded-xl hover:bg-red-600 flex items-center gap-1"
+                           >
+                             <XCircle size={16} />
+                             Reject
+                           </button>
+                         </div>
+                       </div>
+                       {business.national_id_front || business.national_id_back || business.nin_number || business.businessLogo || business.location || business.businessType || business.ownersPic || business.telephone || business.alternative_phone_number ? (
+                         <div className="mt-4 pt-4 border-t border-neutral-100">
+                           <p className="text-sm font-bold text-neutral-700 mb-2">Documents Submitted:</p>
+                           <div className="space-y-2">
+                             {business.national_id_front && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">National ID Front:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.national_id_back && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">National ID Back:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.nin_number && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">NIN Number:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.businessLogo && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Business Logo:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.location && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Location:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.businessType && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Business Type:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.ownersPic && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Owner's Picture:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.telephone && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Telephone:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                             {business.alternative_phone_number && (
+                               <div className="flex items-center">
+                                 <span className="text-xs font-bold text-neutral-400 mr-2">Alternative Phone:</span>
+                                 <span className="text-xs text-neutral-600">✓ Uploaded</span>
+                               </div>
+                             )}
+                           </div>
+                         </div>
+                       ) : (
+                         <div className="p-4 bg-neutral-50 text-sm text-neutral-500">
+                           No documents submitted yet
+                         </div>
+                       )}
+                     </div>
+                   ))}
+                 </div>
+               )}
+             </div>
+           </motion.div>
+         )}
+         {activeTab === 'billing' && (
           <motion.div
             key="billing"
             initial={{ opacity: 0, y: 20 }}
