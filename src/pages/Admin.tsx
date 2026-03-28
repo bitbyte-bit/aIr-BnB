@@ -52,7 +52,14 @@ export default function Admin() {
   const [registerBusiness, setRegisterBusiness] = useState({ name: '', description: '', type: '', logo: '', address: '', contacts: '', social_handles: '', tel: '' });
   const [registerBusinessLoading, setRegisterBusinessLoading] = useState(false);
   const [registerBusinessError, setRegisterBusinessError] = useState<string | null>(null);
-  const [registerBusinessSuccess, setRegisterBusinessSuccess] = useState<{ ownerId: number; businessId: number; passcode: string } | null>(null);
+  const [registerBusinessSuccess, setRegisterBusinessSuccess] = useState<{
+    ownerId: number;
+    businessId: number;
+    passcode: string;
+    ownerEmail: string;
+    ownerName: string;
+    ownerPassword: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
    useEffect(() => {
@@ -123,7 +130,14 @@ export default function Admin() {
        const data = await res.json();
        
        if (res.ok) {
-         setRegisterBusinessSuccess(data);
+         setRegisterBusinessSuccess({
+           ownerId: data.ownerId,
+           businessId: data.businessId,
+           passcode: data.passcode,
+           ownerEmail: registerBusinessOwner.email,
+           ownerName: registerBusinessOwner.name,
+           ownerPassword: registerBusinessOwner.password,
+         });
          setRegisterBusinessModal(false);
          // Reset form
          setRegisterBusinessOwner({ email: '', password: '', name: '' });
@@ -610,6 +624,36 @@ export default function Admin() {
              exit={{ opacity: 0, y: -20 }}
              className="bg-white rounded-[2.5rem] border border-neutral-200 shadow-sm overflow-hidden"
            >
+             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-6 border-b border-neutral-100">
+               <div>
+                 <h2 className="text-xl font-bold text-neutral-900">Registered Businesses</h2>
+                 <p className="text-sm text-neutral-500">Manage businesses and owner account credentials</p>
+               </div>
+               <button
+                 onClick={() => setRegisterBusinessModal(true)}
+                 className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700"
+               >
+                 Register New Business
+               </button>
+             </div>
+
+             {registerBusinessSuccess && (
+               <div className="p-5 border-b border-neutral-100 bg-emerald-50 text-sm text-neutral-700">
+                 <h3 className="font-bold text-neutral-900 mb-2">New Business Credentials</h3>
+                 <p>Owner: <strong>{registerBusinessSuccess.ownerName}</strong></p>
+                 <p>Email: <strong>{registerBusinessSuccess.ownerEmail}</strong></p>
+                 <p>Password: <strong>{registerBusinessSuccess.ownerPassword}</strong></p>
+                 <p>One-Time Passcode: <strong>{registerBusinessSuccess.passcode}</strong></p>
+                 <p className="mt-2 text-xs text-neutral-500">This one-time passcode expires in 1 hour and is required for first login to complete setup.</p>
+                 <button
+                   onClick={() => setRegisterBusinessSuccess(null)}
+                   className="mt-3 px-3 py-1 bg-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-300"
+                 >
+                   Dismiss
+                 </button>
+               </div>
+             )}
+
              <table className="w-full text-left">
                <thead>
                  <tr className="border-bottom border-neutral-100 bg-neutral-50">
@@ -1048,6 +1092,140 @@ export default function Admin() {
                 ))}
               </div>
             )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Register Business Modal */}
+      <AnimatePresence>
+        {registerBusinessModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={() => setRegisterBusinessModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-[2.5rem] w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl border border-neutral-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
+                <h2 className="text-xl font-bold">Register New Business</h2>
+                <button
+                  onClick={() => setRegisterBusinessModal(false)}
+                  className="p-2 rounded-full hover:bg-neutral-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                {registerBusinessError && (
+                  <div className="p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl">
+                    {registerBusinessError}
+                  </div>
+                )}
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">Owner Credentials</h3>
+                    <input
+                      type="text"
+                      placeholder="Owner full name"
+                      value={registerBusinessOwner.name}
+                      onChange={(e) => setRegisterBusinessOwner(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="email"
+                      placeholder="Owner email"
+                      value={registerBusinessOwner.email}
+                      onChange={(e) => setRegisterBusinessOwner(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Owner password"
+                      value={registerBusinessOwner.password}
+                      onChange={(e) => setRegisterBusinessOwner(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="font-semibold">Business Details</h3>
+                    <input
+                      type="text"
+                      placeholder="Business name"
+                      value={registerBusiness.name}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Business type"
+                      value={registerBusiness.type}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, type: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="url"
+                      placeholder="Logo URL"
+                      value={registerBusiness.logo}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, logo: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Address"
+                      value={registerBusiness.address}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, address: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Contacts"
+                      value={registerBusiness.contacts}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, contacts: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Social handles"
+                      value={registerBusiness.social_handles}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, social_handles: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <input
+                      type="tel"
+                      placeholder="Phone"
+                      value={registerBusiness.tel}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, tel: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                    <textarea
+                      placeholder="Business description"
+                      value={registerBusiness.description}
+                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, description: e.target.value }))}
+                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleRegisterBusiness}
+                  disabled={registerBusinessLoading}
+                  className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {registerBusinessLoading ? 'Registering...' : 'Register and Generate OTP'}
+                </button>
+
+                <p className="text-xs text-neutral-500">The generated one-time passcode is valid for 1 hour and is required along with email and password on first login.</p>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
