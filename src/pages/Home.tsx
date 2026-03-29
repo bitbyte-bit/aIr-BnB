@@ -702,13 +702,14 @@ export default function Home({ user }: { user: User | null }) {
           )}
         </div>
       ) : (
-        <div className="mb-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-neutral-900">Discover Items</h2>
-          <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200">
-            <button
-              onClick={() => setItemDisplayMode('grid-2')}
-              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-2' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
-            >
+        <>
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-neutral-900">Discover Items</h2>
+            <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200">
+              <button
+                onClick={() => setItemDisplayMode('grid-2')}
+                className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-2' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
+              >
               <Grid3X3 size={18} />
             </button>
             <button
@@ -819,15 +820,6 @@ export default function Home({ user }: { user: User | null }) {
               <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
               
               <div className="flex items-center gap-4 pt-4 border-t border-neutral-100 mt-auto">
-                {item.type === 'service' && (
-                  <button 
-                    onClick={() => addToCart(item)}
-                    className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
-                  >
-                    <ShoppingCart size={18} />
-                    <span className="text-xs font-semibold uppercase tracking-wider">Add to Cart</span>
-                  </button>
-                )}
                 <button 
                   onClick={() => toggleComments(item.id)}
                   className={`flex items-center gap-2 transition-colors ${activeComments === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
@@ -940,6 +932,7 @@ export default function Home({ user }: { user: User | null }) {
           </motion.div>
         ))}
       </div>
+        </>
       )}
 
       {/* Business Profile Modal */}
