@@ -38,7 +38,12 @@ export default function Inbox({ user }: InboxProps) {
           (msg.sender_id === selectedUser.id && msg.receiver_id === user?.id) ||
           (msg.sender_id === user?.id && msg.receiver_id === selectedUser.id)
         ) {
-          setMessages(prev => [...prev, msg]);
+          setMessages(prev => {
+            if (!prev.find(m => m.id === msg.id)) {
+              return [...prev, msg];
+            }
+            return prev;
+          });
         }
       });
 

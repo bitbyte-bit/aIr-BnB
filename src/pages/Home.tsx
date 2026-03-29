@@ -54,9 +54,12 @@ export default function Home({ user }: { user: User | null }) {
     fetchItems();
 
     socket.on('engagement', ({ itemId, type, count, comment, userName }) => {
-      // Guard against undefined itemId
       if (!itemId) return;
-      
+
+      // Find the item and its owner
+      const item = itemsRef.current.find(i => i.id === itemId);
+      const ownerId = item?.owner_id;
+
       if (type === 'like') {
         setItems(prev => prev.map(item => 
           item.id === itemId ? { ...item, likes: count } : item
@@ -66,7 +69,6 @@ export default function Home({ user }: { user: User | null }) {
           ...prev,
           [itemId]: [...(prev[itemId] || []), comment]
         }));
-        // Also update comments_count
         setItems(prev => prev.map(item =>
           item.id === itemId ? { ...item, comments_count: (item.comments_count || 0) + 1 } : item
         ));
@@ -76,19 +78,21 @@ export default function Home({ user }: { user: User | null }) {
         ));
       }
 
-      // Live Activity Toast
-      const activityId = Date.now();
-      const item = itemsRef.current.find(i => i.id === itemId);
-      const activityText = type === 'like' 
-        ? `${userName || 'Someone'} liked ${item?.title || 'an item'}`
-        : `${userName || 'Someone'} commented on ${item?.title || 'an item'}`;
-      
-      setLiveActivities(prev => [...prev, { id: activityId, text: activityText, type }]);
-      setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
+      // Display notification over the user's header
+      if (ownerId) {
+        setLiveActivities(prev => [
+          ...prev,
+          {
+            id: Date.now(),
+            text: `${userName || 'Someone'} ${type}d your item: ${item?.title || 'an item'}`,
+            ownerId,
+            type
+          }
+        ]);
+      }
     });
 
     socket.on('message', (msg: Message) => {
-      // Guard against null selectedBusiness
       if (!selectedBusiness) return;
       if (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id) {
         setMessages(prev => [...prev, msg]);
@@ -96,14 +100,11 @@ export default function Home({ user }: { user: User | null }) {
     });
 
     socket.on('notification', (data) => {
-      // Guard against null user
       if (!user) return;
       if (data.receiver_id === user.id) {
-        // Play vibration and beep sound when notification is received
         playNotificationAlert();
         
         const activityId = Date.now();
-        // Handle both 'text' and 'body' properties for notification data
         const notificationText = data.text || data.body || 'New notification';
         setLiveActivities(prev => [...prev, { id: activityId, text: notificationText, type: data.type || 'notification' }]);
         setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
@@ -142,7 +143,6 @@ export default function Home({ user }: { user: User | null }) {
       url: shareUrl,
     };
 
-    // Track share in backend
     try {
       await fetch(`/api/items/${item.id}/share`, {
         method: 'POST',
@@ -538,7 +538,10 @@ export default function Home({ user }: { user: User | null }) {
               type="text"
               placeholder="Search for retailers, motor spares, food..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                handleSearch(e);
+              }}
               className="w-full pl-6 pr-16 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder:text-white/60 focus:bg-white focus:text-neutral-900 focus:placeholder:text-neutral-400 outline-none transition-all shadow-lg"
             />
             <button 
@@ -726,11 +729,7 @@ export default function Home({ user }: { user: User | null }) {
             </button>
           </div>
         </div>
-        <div className={`grid gap-6 ${
-          itemDisplayMode === 'grid-2' ? 'sm:grid-cols-2' :
-          itemDisplayMode === 'grid-1' ? 'grid-cols-1' :
-          'grid-cols-1'
-        }`}>
+        <div className={`grid gap-6 grid-cols-2 sm:grid-cols-2`}>
         {items.map((item) => (
           <motion.div
             key={item.id}
