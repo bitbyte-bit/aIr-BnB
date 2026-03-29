@@ -26,7 +26,8 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
   const [userIdForPasswordChange, setUserIdForPasswordChange] = useState(0);
   const [userNameForPasswordChange, setUserNameForPasswordChange] = useState('');
   const { showToast } = useToast();
-  const googleButtonRef = useRef(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const GOOGLE_CLIENT_ID = '847389374219-ukfm55dmakc3aiarg18723gor5mvj9sf.apps.googleusercontent.com';
 
   useEffect(() => {
     // Load Google SDK if not already loaded
@@ -40,9 +41,22 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
 
     const handleScriptLoad = () => {
       window['google'].accounts.id.initialize({
-        client_id: "847389374219-ukfm55dmakc3aiarg18723gor5mvj9sf.apps.googleusercontent.com",
+        client_id: GOOGLE_CLIENT_ID,
         callback: handleCredentialResponse
       });
+
+      if (googleButtonRef.current) {
+        window['google'].accounts.id.renderButton(googleButtonRef.current, {
+          type: 'standard',
+          theme: 'filled_blue',
+          size: 'large',
+          width: '100%',
+          text: 'signin_with'
+        });
+      }
+
+      // Optionally show one-tap prompt
+      window['google'].accounts.id.prompt();
     };
 
     if (window['google']) {
@@ -362,29 +376,6 @@ export default function Auth({ onLogin }: { onLogin: (user: UserType) => void })
                          className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
                        />
                      </div>
-                     <div className="relative">
-                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={20} />
-                       <input
-                         type="email"
-                         placeholder="Email Address"
-                         required
-                         value={email}
-                         onChange={(e) => setEmail(e.target.value)}
-                         className="w-full pl-12 pr-4 py-4 bg-neutral-50 border border-neutral-200 rounded-2xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-                       />
-                     </div>
-                     {!requiresPasscode && (
-                       <div className="relative">
-                         <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400 z-10" size={20} />
-                         <div className="pt-2">
-                           <PasswordInput
-                             value={password}
-                             onChange={setPassword}
-                             placeholder="Password (optional - will be provided by admin)"
-                           />
-                         </div>
-                       </div>
-                     )}
                    </>
                  )}
                  <div className="relative">

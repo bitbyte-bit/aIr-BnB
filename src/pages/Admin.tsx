@@ -4,6 +4,9 @@ import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, Ale
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
 import { useToast } from '../components/Toast';
+import { useCurrency } from '../context/CurrencyContext';
+import TermsPage from './Terms';
+import PrivacyPage from './Privacy';
 
 interface UserDetails {
   id: number;
@@ -29,8 +32,9 @@ interface UserDetails {
 }
 
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending' | 'terms' | 'privacy'>('analytics');
   const { showToast } = useToast();
+  const { formatCurrency } = useCurrency();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -346,19 +350,19 @@ export default function Admin() {
           <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
           <p className="text-neutral-500">Manage your platform and community</p>
         </div>
-        <div className="flex bg-neutral-100 p-1 rounded-2xl">
-          {(['analytics', 'users', 'businesses', 'billing', 'subscriptions', 'pending'] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-6 py-2 rounded-xl text-sm font-bold capitalize transition-all ${
-                activeTab === tab ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
+       <div className="flex bg-neutral-100 p-1 rounded-2xl">
+         {(['analytics', 'users', 'businesses', 'billing', 'subscriptions', 'pending', 'terms', 'privacy'] as const).map((tab) => (
+           <button
+             key={tab}
+             onClick={() => setActiveTab(tab)}
+             className={`px-6 py-2 rounded-xl text-sm font-bold capitalize transition-all ${
+               activeTab === tab ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+             }`}
+           >
+             {tab}
+           </button>
+         ))}
+       </div>
       </header>
 
       <AnimatePresence mode="wait">
@@ -883,15 +887,15 @@ export default function Admin() {
                     <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-neutral-400">Monthly:</span>
-                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.monthly_price?.toLocaleString()}</span>
+                        <span className="font-bold text-neutral-900 ml-2">{formatCurrency(plan.monthly_price || 0)}</span>
                       </div>
                       <div>
                         <span className="text-neutral-400">Yearly:</span>
-                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.yearly_price?.toLocaleString()}</span>
+                        <span className="font-bold text-neutral-900 ml-2">{formatCurrency(plan.yearly_price || 0)}</span>
                       </div>
                       <div>
                         <span className="text-neutral-400">Lifetime:</span>
-                        <span className="font-bold text-neutral-900 ml-2">UGX {plan.lifetime_price?.toLocaleString()}</span>
+                        <span className="font-bold text-neutral-900 ml-2">{formatCurrency(plan.lifetime_price || 0)}</span>
                       </div>
                     </div>
 

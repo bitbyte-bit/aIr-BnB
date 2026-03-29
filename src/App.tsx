@@ -16,6 +16,7 @@ import InboxPage from './pages/Inbox';
 import PrivacyPage from './pages/Privacy';
 import TermsPage from './pages/Terms';
 import { ToastProvider } from './components/Toast';
+import { CurrencyProvider, useCurrency, CurrencyOption } from './context/CurrencyContext';
 import { User as UserType, Business } from './types';
 import socket from './socket';
 import { playNotificationAlert } from './utils/notificationSound';
@@ -246,15 +247,25 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Leave notification room and clean up socket connections
+    if (user?.id) {
+      socket.emit('leave', user.id);
+    }
     setUser(null);
     setBusiness(null);
     localStorage.removeItem('user');
+    // Reset unread count badge
+    setUnreadCount(0);
+    if ('clearAppBadge' in navigator) {
+      navigator.clearAppBadge().catch(console.error);
+    }
   };
 
   return (
     <Router>
-      <ToastProvider>
-        <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
+      <CurrencyProvider>
+        <ToastProvider>
+          <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
         <AnimatePresence>
           {showInstallBanner && (
             <motion.div
@@ -354,6 +365,7 @@ export default function App() {
         </Layout>
       </div>
       </ToastProvider>
+    </CurrencyProvider>
     </Router>
   );
 }
@@ -361,6 +373,7 @@ export default function App() {
 function Layout({ children, user, business, onLogout, onLogin, unreadCount, setUnreadCount }: { children: React.ReactNode; user: UserType | null; business: Business | null; onLogout: () => void; onLogin: (userData: UserType) => void; unreadCount: number; setUnreadCount: (count: number) => void }) {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
+  const { currency, setCurrency } = useCurrency();
 
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
@@ -493,7 +506,21 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
                 ))}
               </nav>
 
-              <div className="p-4 border-t border-neutral-100 space-y-2">
+              <div className="p-4 border-t border-neutral-100 space-y-3">
+                <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-2xl">
+                  <label htmlFor="currency" className="block text-xs font-semibold text-neutral-500 uppercase mb-2">Currency</label>
+                  <select
+                    id="currency"
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value as CurrencyOption)}
+                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="UGX">Uganda Shillings (UGX)</option>
+                    <option value="USD">United States Dollar (USD)</option>
+                    <option value="KES">Kenyan Shilling (KES)</option>
+                    <option value="TZS">Tanzanian Shilling (TZS)</option>
+                  </select>
+                </div>
                 {!user && (
                   <Link
                     to="/auth"

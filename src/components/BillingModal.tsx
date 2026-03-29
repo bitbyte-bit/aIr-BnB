@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Check, Crown, Zap, Star, ExternalLink, Loader2, Camera } from 'lucide-react';
 import { useToast } from './Toast';
+import { useCurrency } from '../context/CurrencyContext';
 
 interface BillingPlan {
   id: number;
@@ -141,9 +142,7 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
     return plan.lifetime_price;
   };
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'UGX', maximumFractionDigits: 0 }).format(price);
-  };
+  const { formatCurrency } = useCurrency();
 
   const getDiscount = () => {
     if (selectedDuration === 'yearly') return 10;
@@ -260,7 +259,7 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
                       <div className="p-6 bg-white">
                         <div className="text-center mb-4">
                           <span className="text-3xl font-black text-neutral-900">
-                            {formatPrice(getPrice(plan))}
+                            {formatCurrency(getPrice(plan))}
                           </span>
                           {selectedDuration !== 'lifetime' && (
                             <span className="text-neutral-500 text-sm">/{selectedDuration === 'monthly' ? 'month' : 'year'}</span>

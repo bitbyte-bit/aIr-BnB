@@ -16,6 +16,10 @@ import fileUpload from 'express-fileupload';
 // Load environment variables
 dotenv.config();
 
+// Google OAuth2 client config (for server-side token verification)
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '847389374219-ukfm55dmakc3aiarg18723gor5mvj9sf.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
+
 // VAPID Keys for Web Push - using env vars or fallbacks for development
 const vapidKeys = {
   publicKey: process.env.VAPID_PUBLIC_KEY || 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco',
@@ -699,6 +703,72 @@ async function startServer() {
        business_id: business?.id
      });
    });
+
+  app.post("/api/auth/google", async (req, res) => {
+    const { id_token } = req.body;
+    if (!id_token) {
+      return res.status(400).json({ error: "Missing id_token" });
+    }
+
+    try {
+      const tokenInfoResp = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`);
+      if (!tokenInfoResp.ok) {
+        return res.status(401).json({ error: "Invalid Google ID token" });
+      }
+
+      const tokenData = await tokenInfoResp.json();
+      if (tokenData.aud !== GOOGLE_CLIENT_ID) {
+        return res.status(401).json({ error: "Invalid Google client ID" });
+      }
+
+      if (!tokenData.email || (tokenData.email_verified !== 'true' && tokenData.email_verified !== true)) {
+        return res.status(403).json({ error: "Google email must be verified" });
+      }
+
+      const email = tokenData.email;
+      const name = tokenData.name || '';
+      const profile_picture = tokenData.picture || null;
+
+      let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+      if (!user) {
+        const userCount = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
+        const role = userCount === 0 ? 'admin' : 'user';
+        const randomPassword = crypto.randomBytes(32).toString('hex');
+        const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+        const insertInfo = db.prepare(
+          "INSERT INTO users (email, password, name, role, is_verified, status, profile_picture) VALUES (?, ?, ?, ?, 1, 'active', ?)"
+        ).run(email, hashedPassword, name, role, profile_picture);
+
+        user = db.prepare("SELECT * FROM users WHERE id = ?").get(insertInfo.lastInsertRowid);
+      } else {
+        if (user.is_verified !== 1) {
+          db.prepare("UPDATE users SET is_verified = 1 WHERE id = ?").run(user.id);
+          user.is_verified = 1;
+        }
+
+        if (profile_picture && user.profile_picture !== profile_picture) {
+          db.prepare("UPDATE users SET profile_picture = ? WHERE id = ?").run(profile_picture, user.id);
+          user.profile_picture = profile_picture;
+        }
+      }
+
+      const business = db.prepare("SELECT id FROM businesses WHERE owner_id = ?").get(user.id);
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        bio: user.bio,
+        profile_picture: user.profile_picture,
+        status: user.status,
+        business_id: business?.id
+      });
+    } catch (err) {
+      console.error("Google auth error:", err);
+      res.status(500).json({ error: "Google sign-in failed" });
+    }
+  });
 
   // Email verification endpoint
   app.post("/api/auth/verify-email", (req, res) => {
