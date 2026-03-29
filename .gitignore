@@ -4,3 +4,4 @@ dist/
 dist-admin/
 coverage/
 !.env.example
+build.log
