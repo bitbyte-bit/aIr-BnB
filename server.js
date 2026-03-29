@@ -17,8 +17,6 @@ import fileUpload from 'express-fileupload';
 dotenv.config();
 
 // Google OAuth2 client config (for server-side token verification)
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '847389374219-ukfm55dmakc3aiarg18723gor5mvj9sf.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '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';
 
 // VAPID Keys for Web Push - using env vars or fallbacks for development
 const vapidKeys = {
