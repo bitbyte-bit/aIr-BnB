@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save, Eye, Mail, Phone, Calendar, BarChart2, MessageCircle, X } from 'lucide-react';
+import { Users, Package, Heart, TrendingUp, Plus, Shield, Briefcase, Trash2, AlertTriangle, CheckCircle, XCircle, CreditCard, Save, Eye, Mail, Phone, Calendar, BarChart2, MessageCircle, X, Edit2, Check, Camera, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
 import { useToast } from '../components/Toast';
@@ -65,6 +65,13 @@ export default function Admin() {
     ownerPassword: string;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [termsContent, setTermsContent] = useState('');
+  const [privacyContent, setPrivacyContent] = useState('');
+  const [editingTerms, setEditingTerms] = useState(false);
+  const [editingPrivacy, setEditingPrivacy] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const itemImageInputRef = React.useRef<HTMLInputElement>(null);
+  const logoInputRef = React.useRef<HTMLInputElement>(null);
 
    useEffect(() => {
      fetchAnalytics();
@@ -78,6 +85,12 @@ export default function Admin() {
      }
      if (activeTab === 'businesses') {
        fetchPendingBusinesses();
+     }
+     if (activeTab === 'terms') {
+       fetchTermsContent();
+     }
+     if (activeTab === 'privacy') {
+       fetchPrivacyContent();
      }
    }, [activeTab]);
 
@@ -102,6 +115,68 @@ export default function Admin() {
        setPendingBusinesses(data);
      } catch (err) {
        console.error('Error fetching pending businesses:', err);
+     }
+   };
+
+   const fetchTermsContent = async () => {
+     try {
+       const res = await fetch('/api/admin/terms');
+       if (res.ok) {
+         const data = await res.json();
+         setTermsContent(data.content || '');
+       }
+     } catch (err) {
+       console.error('Error fetching terms:', err);
+     }
+   };
+
+   const fetchPrivacyContent = async () => {
+     try {
+       const res = await fetch('/api/admin/privacy');
+       if (res.ok) {
+         const data = await res.json();
+         setPrivacyContent(data.content || '');
+       }
+     } catch (err) {
+       console.error('Error fetching privacy:', err);
+     }
+   };
+
+   const saveTermsContent = async () => {
+     try {
+       const res = await fetch('/api/admin/terms', {
+         method: 'PUT',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ content: termsContent })
+       });
+       if (res.ok) {
+         showToast('Terms of service updated successfully!', 'success');
+         setEditingTerms(false);
+       } else {
+         showToast('Failed to update terms', 'error');
+       }
+     } catch (err) {
+       console.error('Error saving terms:', err);
+       showToast('Failed to update terms', 'error');
+     }
+   };
+
+   const savePrivacyContent = async () => {
+     try {
+       const res = await fetch('/api/admin/privacy', {
+         method: 'PUT',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ content: privacyContent })
+       });
+       if (res.ok) {
+         showToast('Privacy policy updated successfully!', 'success');
+         setEditingPrivacy(false);
+       } else {
+         showToast('Failed to update privacy policy', 'error');
+       }
+     } catch (err) {
+       console.error('Error saving privacy:', err);
+       showToast('Failed to update privacy policy', 'error');
      }
    };
 
@@ -238,8 +313,36 @@ export default function Admin() {
     }
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setUploadingImage(true);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewItem(prev => ({ ...prev, image_url: reader.result as string }));
+        setUploadingImage(false);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setRegisterBusiness(prev => ({ ...prev, logo: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handlePostItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newItem.image_url) {
+      showToast('Please upload an image for the item', 'error');
+      return;
+    }
     try {
       const res = await fetch('/api/items', {
         method: 'POST',
@@ -459,14 +562,28 @@ export default function Admin() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Main Image URL</label>
+                  <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Main Image</label>
+                  <div 
+                    onClick={() => itemImageInputRef.current?.click()}
+                    className="w-full h-32 bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer hover:bg-neutral-100 transition-all overflow-hidden"
+                  >
+                    {newItem.image_url ? (
+                      <img src={newItem.image_url} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : uploadingImage ? (
+                      <Loader2 size={24} className="animate-spin text-emerald-600" />
+                    ) : (
+                      <>
+                        <Camera size={24} className="text-neutral-400" />
+                        <span className="text-xs font-medium text-neutral-500">Click to upload image</span>
+                      </>
+                    )}
+                  </div>
                   <input
-                    type="url"
-                    required
-                    value={newItem.image_url}
-                    onChange={(e) => setNewItem({ ...newItem, image_url: e.target.value })}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                    type="file"
+                    ref={itemImageInputRef}
+                    onChange={handleImageUpload}
+                    accept="image/*"
+                    className="hidden"
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">
@@ -1099,6 +1216,126 @@ export default function Admin() {
             )}
           </motion.div>
         )}
+
+        {activeTab === 'terms' && (
+          <motion.div
+            key="terms"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900">Terms of Service</h3>
+                <p className="text-sm text-neutral-500">Edit the terms of service content</p>
+              </div>
+              <button
+                onClick={() => setEditingTerms(!editingTerms)}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-2"
+              >
+                {editingTerms ? <Check size={16} /> : <Edit2 size={16} />}
+                {editingTerms ? 'Save' : 'Edit'}
+              </button>
+            </div>
+
+            {editingTerms ? (
+              <div className="space-y-4">
+                <textarea
+                  value={termsContent}
+                  onChange={(e) => setTermsContent(e.target.value)}
+                  rows={20}
+                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
+                  placeholder="Enter terms of service content..."
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={saveTermsContent}
+                    className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={() => setEditingTerms(false)}
+                    className="px-6 py-2 bg-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200">
+                <div className="prose prose-neutral max-w-none">
+                  {termsContent ? (
+                    <div dangerouslySetInnerHTML={{ __html: termsContent.replace(/\n/g, '<br>') }} />
+                  ) : (
+                    <p className="text-neutral-500 italic">No terms of service content set yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {activeTab === 'privacy' && (
+          <motion.div
+            key="privacy"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900">Privacy Policy</h3>
+                <p className="text-sm text-neutral-500">Edit the privacy policy content</p>
+              </div>
+              <button
+                onClick={() => setEditingPrivacy(!editingPrivacy)}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-2"
+              >
+                {editingPrivacy ? <Check size={16} /> : <Edit2 size={16} />}
+                {editingPrivacy ? 'Save' : 'Edit'}
+              </button>
+            </div>
+
+            {editingPrivacy ? (
+              <div className="space-y-4">
+                <textarea
+                  value={privacyContent}
+                  onChange={(e) => setPrivacyContent(e.target.value)}
+                  rows={20}
+                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
+                  placeholder="Enter privacy policy content..."
+                />
+                <div className="flex gap-3">
+                  <button
+                    onClick={savePrivacyContent}
+                    className="px-6 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700"
+                  >
+                    Save Changes
+                  </button>
+                  <button
+                    onClick={() => setEditingPrivacy(false)}
+                    className="px-6 py-2 bg-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200">
+                <div className="prose prose-neutral max-w-none">
+                  {privacyContent ? (
+                    <div dangerouslySetInnerHTML={{ __html: privacyContent.replace(/\n/g, '<br>') }} />
+                  ) : (
+                    <p className="text-neutral-500 italic">No privacy policy content set yet.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Register Business Modal */}
@@ -1176,13 +1413,29 @@ export default function Admin() {
                       onChange={(e) => setRegisterBusiness(prev => ({ ...prev, type: e.target.value }))}
                       className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
                     />
-                    <input
-                      type="url"
-                      placeholder="Logo URL"
-                      value={registerBusiness.logo}
-                      onChange={(e) => setRegisterBusiness(prev => ({ ...prev, logo: e.target.value }))}
-                      className="w-full px-4 py-3 border border-neutral-200 rounded-xl"
-                    />
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Logo</label>
+                      <div 
+                        onClick={() => logoInputRef.current?.click()}
+                        className="w-full h-24 bg-neutral-50 border-2 border-dashed border-neutral-200 rounded-xl flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-neutral-100 transition-all overflow-hidden"
+                      >
+                        {registerBusiness.logo ? (
+                          <img src={registerBusiness.logo} alt="Logo Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <>
+                            <Camera size={20} className="text-neutral-400" />
+                            <span className="text-xs font-medium text-neutral-500">Click to upload logo</span>
+                          </>
+                        )}
+                      </div>
+                      <input
+                        type="file"
+                        ref={logoInputRef}
+                        onChange={handleLogoUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                    </div>
                     <input
                       type="text"
                       placeholder="Address"

@@ -37,7 +37,9 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     description: '', 
     image_url: '',
     gallery: [] as string[],
-    customFields: [] as { key: string; value: string }[]
+    customFields: [] as { key: string; value: string }[],
+    type: 'product' as 'product' | 'service',
+    price: ''
   });
   
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -257,7 +259,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         }),
       });
       if (res.ok) {
-        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [] });
+        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [], type: 'product', price: '' });
         showToast('Item posted successfully!', 'success');
         fetchAnalytics();
         fetchBusinessItems();
@@ -925,6 +927,31 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                   onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                   rows={3}
                   className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none disabled:cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Type</label>
+                <select
+                  disabled={!business.is_approved}
+                  value={newItem.type}
+                  onChange={(e) => setNewItem({ ...newItem, type: e.target.value as 'product' | 'service' })}
+                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
+                >
+                  <option value="product">Product</option>
+                  <option value="service">Service</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Price (UGX)</label>
+                <input
+                  type="number"
+                  disabled={!business.is_approved}
+                  value={newItem.price}
+                  onChange={(e) => setNewItem({ ...newItem, price: e.target.value })}
+                  placeholder="0"
+                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
                 />
               </div>
 

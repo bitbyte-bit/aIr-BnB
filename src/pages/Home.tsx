@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users, Star } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users, Star, Grid3X3, List, Layout, ShoppingCart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
 import { playNotificationAlert } from '../utils/notificationSound';
@@ -38,6 +38,9 @@ export default function Home({ user }: { user: User | null }) {
 
   const [reviewItem, setReviewItem] = useState<Item | null>(null);
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [itemDisplayMode, setItemDisplayMode] = useState<'grid-2' | 'grid-1' | 'list'>('grid-2');
+  const [cart, setCart] = useState<Item[]>([]);
+  const [showCart, setShowCart] = useState(false);
 
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
@@ -358,6 +361,36 @@ export default function Home({ user }: { user: User | null }) {
     }
   };
 
+  const addToCart = (item: Item) => {
+    if (item.type === 'service') {
+      setCart(prev => {
+        if (prev.find(cartItem => cartItem.id === item.id)) {
+          showToast('Service already in cart', 'info');
+          return prev;
+        } else {
+          showToast('Service added to cart', 'success');
+          return [...prev, item];
+        }
+      });
+    } else {
+      showToast('Only services can be added to cart', 'info');
+    }
+  };
+
+  const removeFromCart = (itemId: string) => {
+    setCart(prev => prev.filter(item => item.id !== itemId));
+    showToast('Service removed from cart', 'success');
+  };
+
+  const checkoutCart = async () => {
+    if (cart.length === 0) return;
+    
+    // For now, just show a message. In a real app, this would integrate with a payment system
+    showToast(`Checkout initiated for ${cart.length} service(s)`, 'success');
+    setCart([]);
+    setShowCart(false);
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) {
@@ -669,20 +702,51 @@ export default function Home({ user }: { user: User | null }) {
           )}
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-neutral-900">Discover Items</h2>
+          <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200">
+            <button
+              onClick={() => setItemDisplayMode('grid-2')}
+              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-2' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
+            >
+              <Grid3X3 size={18} />
+            </button>
+            <button
+              onClick={() => setItemDisplayMode('grid-1')}
+              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-1' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
+            >
+              <Layout size={18} />
+            </button>
+            <button
+              onClick={() => setItemDisplayMode('list')}
+              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'list' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
+            >
+              <List size={18} />
+            </button>
+          </div>
+        </div>
+        <div className={`grid gap-6 ${
+          itemDisplayMode === 'grid-2' ? 'sm:grid-cols-2' :
+          itemDisplayMode === 'grid-1' ? 'grid-cols-1' :
+          'grid-cols-1'
+        }`}>
         {items.map((item) => (
           <motion.div
             key={item.id}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`group bg-white rounded-3xl overflow-hidden border-2 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col ${
+            className={`group bg-white rounded-3xl overflow-hidden border-2 shadow-sm hover:shadow-xl transition-all duration-300 ${
+              itemDisplayMode === 'list' ? 'flex flex-row' : 'flex flex-col'
+            } ${
               item.subscription_plan === 'Lifetime' ? 'border-yellow-400 shadow-yellow-100' :
               item.subscription_plan === 'Standard' ? 'border-emerald-500 shadow-emerald-100' :
               item.subscription_plan === 'Starter' ? 'border-orange-400 shadow-orange-100' :
               item.subscription_status === 'active' ? 'border-neutral-200' : 'border-red-400 shadow-red-100'
             }`}
           >
-            <div className={`aspect-[4/3] overflow-hidden bg-neutral-100 ${
+            <div className={`${
+              itemDisplayMode === 'list' ? 'w-48 h-48 flex-shrink-0' : 'aspect-[4/3]'
+            } overflow-hidden bg-neutral-100 ${
               item.subscription_plan === 'Lifetime' ? 'ring-4 ring-yellow-100' :
               item.subscription_plan === 'Standard' ? 'ring-4 ring-emerald-100' :
               item.subscription_plan === 'Starter' ? 'ring-4 ring-orange-100' :
@@ -725,6 +789,12 @@ export default function Home({ user }: { user: User | null }) {
                       )}
                     </div>
                   )}
+                  {item.type === 'service' && item.price && (
+                    <div className="mt-2">
+                      <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
+                      <span className="text-xs text-neutral-500 ml-2">Service</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5 text-neutral-400">
@@ -749,6 +819,15 @@ export default function Home({ user }: { user: User | null }) {
               <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
               
               <div className="flex items-center gap-4 pt-4 border-t border-neutral-100 mt-auto">
+                {item.type === 'service' && (
+                  <button 
+                    onClick={() => addToCart(item)}
+                    className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
+                  >
+                    <ShoppingCart size={18} />
+                    <span className="text-xs font-semibold uppercase tracking-wider">Add to Cart</span>
+                  </button>
+                )}
                 <button 
                   onClick={() => toggleComments(item.id)}
                   className={`flex items-center gap-2 transition-colors ${activeComments === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}

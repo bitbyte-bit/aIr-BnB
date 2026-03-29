@@ -55,6 +55,8 @@ export interface Item {
   average_rating?: number;
   subscription_status?: string;
   subscription_plan?: string;
+  type?: 'product' | 'service';
+  price?: string;
 }
 
 export interface Business {
