@@ -639,7 +639,7 @@ export default function Home({ user }: { user: User | null }) {
           {searchResults.items.length > 0 && (
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Products & Services</h4>
-              <div className="grid gap-6 sm:grid-cols-2">
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                 {searchResults.items.map(item => (
                   <div key={item.id} className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-sm hover:shadow-xl transition-all group ${
                     item.subscription_plan === 'Lifetime' ? 'border-yellow-400' :
@@ -729,7 +729,7 @@ export default function Home({ user }: { user: User | null }) {
             </button>
           </div>
         </div>
-        <div className={`grid gap-6 grid-cols-2 sm:grid-cols-2`}>
+        <div className={`${itemDisplayMode === 'list' ? 'space-y-6' : `grid gap-6 ${itemDisplayMode === 'grid-1' ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}`}>
         {items.map((item) => (
           <motion.div
             key={item.id}
@@ -745,7 +745,7 @@ export default function Home({ user }: { user: User | null }) {
             }`}
           >
             <div className={`${
-              itemDisplayMode === 'list' ? 'w-48 h-48 flex-shrink-0' : 'aspect-[4/3]'
+              itemDisplayMode === 'list' ? 'w-32 h-32 sm:w-48 sm:h-48 flex-shrink-0' : 'aspect-[4/3]'
             } overflow-hidden bg-neutral-100 ${
               item.subscription_plan === 'Lifetime' ? 'ring-4 ring-yellow-100' :
               item.subscription_plan === 'Standard' ? 'ring-4 ring-emerald-100' :
