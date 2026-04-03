@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare, Search, FileText, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -29,7 +29,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export default function App() {
+function AppContent() {
   const navigate = useNavigate();
   const [user, setUser] = useState<UserType | null>(() => {
     try {
@@ -381,8 +381,7 @@ export default function App() {
   };
 
   return (
-    <Router>
-      <CurrencyProvider>
+    <CurrencyProvider>
         <ToastProvider>
           <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
         <AnimatePresence>
@@ -489,6 +488,13 @@ export default function App() {
       </div>
       </ToastProvider>
     </CurrencyProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
