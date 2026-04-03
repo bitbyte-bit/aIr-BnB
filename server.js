@@ -481,6 +481,26 @@ try {
   console.error("Error creating push_subscriptions table:", e);
 }
 
+// Create banners table
+try {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS banners (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK(type IN ('update', 'welcome')),
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      background_color TEXT DEFAULT '#3b82f6',
+      text_color TEXT DEFAULT '#ffffff',
+      button_text TEXT,
+      button_url TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+} catch (e) {
+  console.error("Error creating banners table:", e);
+}
+
 // Seed System User and Master Admin
 const existingSystemUser = db.prepare("SELECT * FROM users WHERE email = ?").get("vitu@system.com");
 if (!existingSystemUser) {
@@ -1957,11 +1977,43 @@ async function startServer() {
     const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
     db.prepare("INSERT INTO messages (id, sender_id, receiver_id, text, attachment) VALUES (?, ?, ?, ?, ?)").run(id, sender_id, receiver_id, text, attachment);
     const newMessage = db.prepare("SELECT * FROM messages WHERE id = ?").get(id);
-    
-    // Send message only to the specific sender and receiver
+
+    // Send message only to the specific sender and receiver via socket
     io.to(`user_${sender_id}`).emit("message", newMessage);
     io.to(`user_${receiver_id}`).emit("message", newMessage);
-    
+
+    // Send push notification to the receiver (for when app is closed)
+    const pushNotificationPayload = JSON.stringify({
+      title: 'New Message',
+      body: `You have a new message`,
+      icon: '/icon-192.png',
+      badge: '/badge-72.png',
+      tag: 'chat-' + id,
+      data: { messageId: id, type: 'chat', senderId: sender_id }
+    });
+
+    // Get push subscription for the receiver
+    const subscription = db.prepare("SELECT * FROM push_subscriptions WHERE user_id = ?").get(receiver_id);
+
+    if (subscription) {
+      const pushSubscription = {
+        endpoint: subscription.endpoint,
+        keys: JSON.parse(subscription.keys)
+      };
+
+      webpush.sendNotification(pushSubscription, pushNotificationPayload)
+        .then(() => console.log(`Chat push notification sent to user ${receiver_id}`))
+        .catch((err) => {
+          if (err.statusCode === 410) {
+            // Subscription expired, remove it
+            db.prepare("DELETE FROM push_subscriptions WHERE id = ?").run(subscription.id);
+            console.log(`Removed expired push subscription for user ${receiver_id}`);
+          } else {
+            console.error("Error sending chat push notification:", err);
+          }
+        });
+    }
+
     res.json(newMessage);
   });
 
@@ -2031,13 +2083,13 @@ async function startServer() {
   app.get("/api/admin/analytics", (req, res) => {
     try {
       const likesByDay = db.prepare(`
-        SELECT DATE(timestamp) as date, COUNT(*) as count 
-        FROM analytics 
-        WHERE event_type = 'like' 
+        SELECT DATE(timestamp) as date, COUNT(*) as count
+        FROM analytics
+        WHERE event_type = 'like'
         GROUP BY DATE(timestamp)
         LIMIT 7
       `).all();
-      
+
       const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users").get().count;
       const totalItems = db.prepare("SELECT COUNT(*) as count FROM items").get().count;
       const totalLikes = db.prepare("SELECT COUNT(*) as count FROM likes").get().count;
@@ -2046,6 +2098,87 @@ async function startServer() {
     } catch (err) {
       console.error(err);
       res.status(500).json({ error: "Failed to fetch admin analytics" });
+    }
+  });
+
+  // Banner Routes
+  app.get("/api/banners/active", (req, res) => {
+    try {
+      const banners = db.prepare("SELECT * FROM banners WHERE is_active = 1 ORDER BY created_at DESC").all();
+      res.json(banners);
+    } catch (err) {
+      console.error("Error fetching active banners:", err);
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  // Admin banner routes
+  app.get("/api/admin/banners", (req, res) => {
+    try {
+      const banners = db.prepare("SELECT * FROM banners ORDER BY created_at DESC").all();
+      res.json(banners);
+    } catch (err) {
+      console.error("Error fetching banners:", err);
+      res.status(500).json({ error: "Failed to fetch banners" });
+    }
+  });
+
+  app.post("/api/admin/banners", (req, res) => {
+    const { type, title, message, backgroundColor, textColor, buttonText, buttonUrl } = req.body;
+
+    if (!type || !title || !message) {
+      return res.status(400).json({ error: "Type, title, and message are required" });
+    }
+
+    if (!['update', 'welcome'].includes(type)) {
+      return res.status(400).json({ error: "Type must be 'update' or 'welcome'" });
+    }
+
+    try {
+      const id = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
+      db.prepare(`
+        INSERT INTO banners (id, type, title, message, background_color, text_color, button_text, button_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, type, title, message, backgroundColor || '#3b82f6', textColor || '#ffffff', buttonText, buttonUrl);
+
+      res.json({ success: true, banner: { id, type, title, message, backgroundColor, textColor, buttonText, buttonUrl } });
+    } catch (err) {
+      console.error("Error creating banner:", err);
+      res.status(500).json({ error: "Failed to create banner" });
+    }
+  });
+
+  app.put("/api/admin/banners/:id", (req, res) => {
+    const { id } = req.params;
+    const { type, title, message, backgroundColor, textColor, buttonText, buttonUrl, isActive } = req.body;
+
+    if (!type || !title || !message) {
+      return res.status(400).json({ error: "Type, title, and message are required" });
+    }
+
+    try {
+      db.prepare(`
+        UPDATE banners
+        SET type = ?, title = ?, message = ?, background_color = ?, text_color = ?, button_text = ?, button_url = ?, is_active = ?
+        WHERE id = ?
+      `).run(type, title, message, backgroundColor, textColor, buttonText, buttonUrl, isActive ? 1 : 0, id);
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error updating banner:", err);
+      res.status(500).json({ error: "Failed to update banner" });
+    }
+  });
+
+  app.delete("/api/admin/banners/:id", (req, res) => {
+    const { id } = req.params;
+
+    try {
+      db.prepare("DELETE FROM banners WHERE id = ?").run(id);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Error deleting banner:", err);
+      res.status(500).json({ error: "Failed to delete banner" });
     }
   });
 

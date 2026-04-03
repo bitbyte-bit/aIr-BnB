@@ -10,6 +10,9 @@ interface Item {
   image_url: string;
   gallery?: string;
   custom_fields?: string;
+  type?: 'product' | 'service';
+  price?: string;
+  discount?: string;
 }
 
 interface EditItemModalProps {
@@ -26,6 +29,9 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
   const [imageUrl, setImageUrl] = useState(item?.image_url || '');
   const [gallery, setGallery] = useState<string[]>([]);
   const [customFields, setCustomFields] = useState<{ key: string; value: string }[]>([]);
+  const [type, setType] = useState<'product' | 'service'>(item?.type || 'product');
+  const [price, setPrice] = useState(item?.price || '');
+  const [discount, setDiscount] = useState(item?.discount || '');
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
 
@@ -34,6 +40,9 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
       setTitle(item.title || '');
       setDescription(item.description || '');
       setImageUrl(item.image_url || '');
+      setType(item.type || 'product');
+      setPrice(item.price || '');
+      setDiscount(item.discount || '');
       try {
         const parsedGallery = item.gallery ? JSON.parse(item.gallery) : [];
         setGallery(Array.isArray(parsedGallery) ? parsedGallery : []);
@@ -52,6 +61,9 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
       setImageUrl('');
       setGallery([]);
       setCustomFields([]);
+      setType('product');
+      setPrice('');
+      setDiscount('');
     }
   }, [item]);
 
@@ -81,7 +93,10 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
           description,
           image_url: imageUrl,
           gallery: JSON.stringify(gallery),
-          custom_fields: JSON.stringify(customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {}))
+          custom_fields: JSON.stringify(customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {})),
+          type,
+          price,
+          discount
         })
       });
 
@@ -207,6 +222,45 @@ export default function EditItemModal({ isOpen, onClose, item, onSave }: EditIte
                   rows={4}
                   className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-none"
                   placeholder="Item description"
+                />
+              </div>
+
+              {/* Type */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Type</label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as 'product' | 'service')}
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                >
+                  <option value="product">Product</option>
+                  <option value="service">Service</option>
+                </select>
+              </div>
+
+              {/* Price */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Price (UGX)</label>
+                <input
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                />
+              </div>
+
+              {/* Discount */}
+              <div>
+                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-widest mb-2">Discount (%)</label>
+                <input
+                  type="number"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                  className="w-full px-4 py-3 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
                 />
               </div>
 

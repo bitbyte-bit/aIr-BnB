@@ -31,8 +31,21 @@ interface UserDetails {
   recentItems: any[];
 }
 
+interface Banner {
+  id: string;
+  type: 'update' | 'welcome';
+  title: string;
+  message: string;
+  backgroundColor: string;
+  textColor: string;
+  buttonText?: string;
+  buttonUrl?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function Admin() {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending' | 'terms' | 'privacy'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending' | 'banners' | 'terms' | 'privacy'>('analytics');
   const { showToast } = useToast();
   const { formatCurrency } = useCurrency();
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
@@ -43,6 +56,9 @@ export default function Admin() {
   const [pendingSubscriptions, setPendingSubscriptions] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
   const [userDetailsLoading, setUserDetailsLoading] = useState(false);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
+  const [showBannerForm, setShowBannerForm] = useState(false);
   const [newItem, setNewItem] = useState({ 
     title: '', 
     description: '', 
@@ -89,9 +105,12 @@ export default function Admin() {
      if (activeTab === 'terms') {
        fetchTermsContent();
      }
-     if (activeTab === 'privacy') {
-       fetchPrivacyContent();
-     }
+      if (activeTab === 'privacy') {
+        fetchPrivacyContent();
+      }
+      if (activeTab === 'banners') {
+        fetchBanners();
+      }
    }, [activeTab]);
 
    const fetchAnalytics = async () => {
@@ -130,17 +149,86 @@ export default function Admin() {
      }
    };
 
-   const fetchPrivacyContent = async () => {
-     try {
-       const res = await fetch('/api/admin/privacy');
-       if (res.ok) {
-         const data = await res.json();
-         setPrivacyContent(data.content || '');
-       }
-     } catch (err) {
-       console.error('Error fetching privacy:', err);
-     }
-   };
+    const fetchPrivacyContent = async () => {
+      try {
+        const res = await fetch('/api/admin/privacy');
+        if (res.ok) {
+          const data = await res.json();
+          setPrivacyContent(data.content || '');
+        }
+      } catch (err) {
+        console.error('Error fetching privacy:', err);
+      }
+    };
+
+    const fetchBanners = async () => {
+      try {
+        const res = await fetch('/api/admin/banners');
+        if (res.ok) {
+          const data = await res.json();
+          setBanners(data);
+        }
+      } catch (err) {
+        console.error('Error fetching banners:', err);
+      }
+    };
+
+    const createBanner = async (bannerData: Omit<Banner, 'id' | 'createdAt'>) => {
+      try {
+        const res = await fetch('/api/admin/banners', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bannerData)
+        });
+        if (res.ok) {
+          showToast('Banner created successfully!', 'success');
+          fetchBanners();
+          setShowBannerForm(false);
+        } else {
+          showToast('Failed to create banner', 'error');
+        }
+      } catch (err) {
+        console.error('Error creating banner:', err);
+        showToast('Failed to create banner', 'error');
+      }
+    };
+
+    const updateBanner = async (id: string, bannerData: Partial<Banner>) => {
+      try {
+        const res = await fetch(`/api/admin/banners/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bannerData)
+        });
+        if (res.ok) {
+          showToast('Banner updated successfully!', 'success');
+          fetchBanners();
+          setEditingBanner(null);
+        } else {
+          showToast('Failed to update banner', 'error');
+        }
+      } catch (err) {
+        console.error('Error updating banner:', err);
+        showToast('Failed to update banner', 'error');
+      }
+    };
+
+    const deleteBanner = async (id: string) => {
+      if (!confirm('Are you sure you want to delete this banner?')) return;
+
+      try {
+        const res = await fetch(`/api/admin/banners/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Banner deleted successfully!', 'success');
+          fetchBanners();
+        } else {
+          showToast('Failed to delete banner', 'error');
+        }
+      } catch (err) {
+        console.error('Error deleting banner:', err);
+        showToast('Failed to delete banner', 'error');
+      }
+    };
 
    const saveTermsContent = async () => {
      try {
@@ -453,18 +541,18 @@ export default function Admin() {
           <h1 className="text-3xl font-bold tracking-tight">Admin Dashboard</h1>
           <p className="text-neutral-500">Manage your platform and community</p>
         </div>
-       <div className="flex bg-neutral-100 p-1 rounded-2xl">
-         {(['analytics', 'users', 'businesses', 'billing', 'subscriptions', 'pending', 'terms', 'privacy'] as const).map((tab) => (
-           <button
-             key={tab}
-             onClick={() => setActiveTab(tab)}
-             className={`px-6 py-2 rounded-xl text-sm font-bold capitalize transition-all ${
-               activeTab === tab ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
-             }`}
-           >
-             {tab}
-           </button>
-         ))}
+        <div className="flex bg-neutral-100 p-1 rounded-2xl">
+          {(['analytics', 'users', 'businesses', 'billing', 'subscriptions', 'pending', 'banners', 'terms', 'privacy'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2 rounded-xl text-sm font-bold capitalize transition-all ${
+                activeTab === tab ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500 hover:text-neutral-700'
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
        </div>
       </header>
 
@@ -1274,6 +1362,238 @@ export default function Admin() {
                 </div>
               </div>
             )}
+          </motion.div>
+        )}
+
+        {activeTab === 'banners' && (
+          <motion.div
+            key="banners"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold text-neutral-900">Banners</h3>
+                <p className="text-sm text-neutral-500">Manage app banners and notifications</p>
+              </div>
+              <button
+                onClick={() => setShowBannerForm(true)}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 flex items-center gap-2"
+              >
+                <Plus size={16} />
+                Add Banner
+              </button>
+            </div>
+
+            <div className="grid gap-4">
+              {banners.map((banner) => (
+                <div key={banner.id} className="bg-white border border-neutral-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded-full border border-neutral-300"
+                        style={{ backgroundColor: banner.backgroundColor }}
+                      />
+                      <span className="text-sm font-medium capitalize">{banner.type}</span>
+                      <span className={`px-2 py-1 text-xs rounded-full ${banner.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-600'}`}>
+                        {banner.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingBanner(banner)}
+                        className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() => deleteBanner(banner.id)}
+                        className="p-2 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h4 className="font-semibold">{banner.title}</h4>
+                    <p className="text-sm text-neutral-600">{banner.message}</p>
+                    {banner.buttonText && (
+                      <p className="text-xs text-neutral-500">Button: {banner.buttonText}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {banners.length === 0 && (
+                <div className="text-center py-12 text-neutral-500">
+                  <p>No banners created yet.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Banner Form Modal */}
+            <AnimatePresence>
+              {(showBannerForm || editingBanner) && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                >
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0.9, opacity: 0 }}
+                    className="bg-white rounded-2xl p-6 w-full max-w-md"
+                  >
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-xl font-bold">
+                        {editingBanner ? 'Edit Banner' : 'Create Banner'}
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setShowBannerForm(false);
+                          setEditingBanner(null);
+                        }}
+                        className="p-2 hover:bg-neutral-100 rounded-lg"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      const formData = new FormData(e.target as HTMLFormElement);
+                      const bannerData = {
+                        type: formData.get('type') as 'update' | 'welcome',
+                        title: formData.get('title') as string,
+                        message: formData.get('message') as string,
+                        backgroundColor: formData.get('backgroundColor') as string,
+                        textColor: formData.get('textColor') as string,
+                        buttonText: formData.get('buttonText') as string || undefined,
+                        buttonUrl: formData.get('buttonUrl') as string || undefined,
+                        isActive: (formData.get('isActive') as string) === 'on'
+                      };
+
+                      if (editingBanner) {
+                        updateBanner(editingBanner.id, bannerData);
+                      } else {
+                        createBanner(bannerData);
+                      }
+                    }}>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 mb-1">Type</label>
+                          <select
+                            name="type"
+                            defaultValue={editingBanner?.type || 'update'}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                            required
+                          >
+                            <option value="update">Update Notification</option>
+                            <option value="welcome">Welcome Message</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 mb-1">Title</label>
+                          <input
+                            type="text"
+                            name="title"
+                            defaultValue={editingBanner?.title || ''}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 mb-1">Message</label>
+                          <textarea
+                            name="message"
+                            defaultValue={editingBanner?.message || ''}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none resize-none"
+                            required
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Background Color</label>
+                            <input
+                              type="color"
+                              name="backgroundColor"
+                              defaultValue={editingBanner?.backgroundColor || '#3b82f6'}
+                              className="w-full h-10 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-neutral-700 mb-1">Text Color</label>
+                            <input
+                              type="color"
+                              name="textColor"
+                              defaultValue={editingBanner?.textColor || '#ffffff'}
+                              className="w-full h-10 border border-neutral-200 rounded-lg"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 mb-1">Button Text (Optional)</label>
+                          <input
+                            type="text"
+                            name="buttonText"
+                            defaultValue={editingBanner?.buttonText || ''}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-neutral-700 mb-1">Button URL (Optional)</label>
+                          <input
+                            type="url"
+                            name="buttonUrl"
+                            defaultValue={editingBanner?.buttonUrl || ''}
+                            className="w-full px-3 py-2 border border-neutral-200 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            name="isActive"
+                            id="isActive"
+                            defaultChecked={editingBanner?.isActive ?? true}
+                            className="rounded border-neutral-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <label htmlFor="isActive" className="text-sm text-neutral-700">Active</label>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3 mt-6">
+                        <button
+                          type="submit"
+                          className="flex-1 px-4 py-2 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700"
+                        >
+                          {editingBanner ? 'Update' : 'Create'} Banner
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowBannerForm(false);
+                            setEditingBanner(null);
+                          }}
+                          className="px-4 py-2 bg-neutral-200 text-neutral-700 font-bold rounded-xl hover:bg-neutral-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
 

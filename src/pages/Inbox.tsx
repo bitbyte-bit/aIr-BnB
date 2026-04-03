@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, Users, ChevronLeft, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
+import { playChatAlert } from '../utils/notificationSound';
 import { User as UserType, Message } from '../types';
 
 interface InboxProps {
@@ -38,6 +39,9 @@ export default function Inbox({ user }: InboxProps) {
           (msg.sender_id === selectedUser.id && msg.receiver_id === user?.id) ||
           (msg.sender_id === user?.id && msg.receiver_id === selectedUser.id)
         ) {
+          // Play chat alert sound and vibration
+          playChatAlert();
+
           setMessages(prev => {
             if (!prev.find(m => m.id === msg.id)) {
               return [...prev, msg];

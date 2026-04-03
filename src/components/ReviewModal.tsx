@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Star, Send, User } from 'lucide-react';
+import { X, Star, Send, User, ShoppingCart } from 'lucide-react';
 import { Item, Review, User as UserType } from '../types';
 
 interface ReviewModalProps {
@@ -8,9 +8,11 @@ interface ReviewModalProps {
   user: UserType;
   isOpen: boolean;
   onClose: () => void;
+  addToCart?: (item: Item) => void;
+  onNegotiate?: (businessId: string) => void;
 }
 
-export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModalProps) {
+export default function ReviewModal({ item, user, isOpen, onClose, addToCart, onNegotiate }: ReviewModalProps) {
   // Guard against null user
   if (!user) {
     return null;
@@ -158,17 +160,39 @@ export default function ReviewModal({ item, user, isOpen, onClose }: ReviewModal
                     referrerPolicy="no-referrer"
                   />
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-neutral-900">{item.title}</h2>
-                  <div className="flex items-center gap-2 mt-1">
-                    <div className="flex items-center">
-                      {renderStars(Math.round(averageRating))}
-                    </div>
-                    <span className="text-sm text-neutral-500">
-                      {averageRating.toFixed(1)} ({totalReviews} reviews)
-                    </span>
-                  </div>
-                </div>
+                 <div className="flex-1">
+                   <h2 className="text-xl font-bold text-neutral-900">{item.title}</h2>
+                   <div className="flex items-center gap-2 mt-1">
+                     <div className="flex items-center">
+                       {renderStars(Math.round(averageRating))}
+                     </div>
+                     <span className="text-sm text-neutral-500">
+                       {averageRating.toFixed(1)} ({totalReviews} reviews)
+                     </span>
+                   </div>
+                   {item.type === 'product' && item.price && (
+                     <div className="mt-2">
+                       <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
+                       <span className="text-xs text-neutral-500 ml-2">Product</span>
+                     </div>
+                   )}
+                 </div>
+                 {item.type === 'product' && addToCart && (
+                   <button
+                     onClick={() => addToCart(item)}
+                     className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors"
+                   >
+                     <ShoppingCart size={20} />
+                   </button>
+                 )}
+                 {item.type === 'service' && onNegotiate && item.business_id && (
+                   <button
+                     onClick={() => onNegotiate(item.business_id!)}
+                     className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-colors"
+                   >
+                     Negotiate
+                   </button>
+                 )}
               </div>
             </div>
 

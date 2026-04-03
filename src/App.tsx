@@ -19,7 +19,8 @@ import { ToastProvider } from './components/Toast';
 import { CurrencyProvider, useCurrency, CurrencyOption } from './context/CurrencyContext';
 import { User as UserType, Business } from './types';
 import socket from './socket';
-import { playNotificationAlert } from './utils/notificationSound';
+import { playNotificationAlert, playSystemAlert } from './utils/notificationSound';
+import Banner, { BannerData } from './components/Banner';
 
 // VAPID public key - should match server.js
 const VAPID_PUBLIC_KEY = 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco';
@@ -29,6 +30,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export default function App() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<UserType | null>(() => {
     try {
       const saved = localStorage.getItem('user');
@@ -49,6 +51,16 @@ export default function App() {
       return isNaN(parsed) || parsed < 0 ? 0 : parsed;
     } catch {
       return 0;
+    }
+  });
+  const [banners, setBanners] = useState<BannerData[]>([]);
+  const [currentBanner, setCurrentBanner] = useState<BannerData | null>(null);
+  const [dismissedBanners, setDismissedBanners] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('dismissed_banners');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
     }
   });
 
@@ -132,15 +144,96 @@ export default function App() {
     setShowInstallBanner(false);
   };
 
+  const fetchBanners = async () => {
+    try {
+      const res = await fetch('/api/banners/active');
+      if (res.ok) {
+        const data = await res.json();
+        setBanners(data);
+      }
+    } catch (err) {
+      console.error('Error fetching banners:', err);
+    }
+  };
+
+  const showBanner = (banner: BannerData) => {
+    if (!dismissedBanners.includes(banner.id)) {
+      setCurrentBanner(banner);
+    }
+  };
+
+  const dismissBanner = () => {
+    if (currentBanner) {
+      const newDismissed = [...dismissedBanners, currentBanner.id];
+      setDismissedBanners(newDismissed);
+      localStorage.setItem('dismissed_banners', JSON.stringify(newDismissed));
+      setCurrentBanner(null);
+    }
+  };
+
+  const handleBannerInstallUpdate = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      }
+      setDeferredPrompt(null);
+      dismissBanner();
+    }
+  };
+
+  const handleBannerChat = () => {
+    // Open WhatsApp chat
+    const whatsappUrl = 'https://wa.me/1234567890'; // Replace with actual WhatsApp number
+    window.open(whatsappUrl, '_blank');
+    dismissBanner();
+  };
+
   useEffect(() => {
     if (user && user.id) {
       // Join user's notification room
       socket.emit('join', user.id);
-      
-      fetchBusiness();
-      setupNotifications();
+      // Register for push notifications after login
+      registerPushNotifications(user.id);
+      // Navigate to home after login
+      navigate('/');
     }
   }, [user]);
+
+  // Fetch banners on app load
+  useEffect(() => {
+    fetchBanners();
+  }, []);
+
+  // Show welcome banner for new users
+  useEffect(() => {
+    if (user && banners.length > 0) {
+      // Check if user is new (created within last 24 hours)
+      const userCreatedAt = new Date(user.created_at);
+      const now = new Date();
+      const hoursSinceCreation = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60);
+
+      if (hoursSinceCreation < 24) {
+        const welcomeBanner = banners.find(b => b.type === 'welcome');
+        if (welcomeBanner) {
+          // Delay showing welcome banner to let user settle in
+          setTimeout(() => showBanner(welcomeBanner), 3000);
+        }
+      }
+    }
+  }, [user, banners]);
+
+  // Show update banner when new features are available
+  useEffect(() => {
+    if (banners.length > 0 && !user) {
+      // Show update banner to non-logged-in users (or could be to all users)
+      const updateBanner = banners.find(b => b.type === 'update');
+      if (updateBanner) {
+        setTimeout(() => showBanner(updateBanner), 5000);
+      }
+    }
+  }, [banners, user]);
 
   const fetchBusiness = async (retries = 3) => {
     if (!user) return;
@@ -169,10 +262,17 @@ export default function App() {
       // Validate notification data before using
       const title = data?.title || 'Vitu Notification';
       const body = data?.body || data?.text || 'You have a new notification';
-      
-      // Play vibration and beep sound when notification is received (app is open)
-      playNotificationAlert();
-      
+      const type = data?.type || 'default';
+
+      // Play appropriate alert based on notification type
+      if (type === 'new_item') {
+        playNotificationAlert(); // sound + vibration
+      } else if (type === 'follow' || type === 'system' || type === 'success' || type === 'error') {
+        playSystemAlert(); // only vibration
+      } else {
+        playNotificationAlert(); // default: sound + vibration
+      }
+
       if (Notification.permission === "granted") {
         new Notification(title, { body });
       }
@@ -244,6 +344,8 @@ export default function App() {
     socket.emit('join', userData.id);
     // Register for push notifications after login
     registerPushNotifications(userData.id);
+    // Navigate to home after login
+    navigate('/');
   };
 
   const handleLogout = () => {
@@ -259,6 +361,8 @@ export default function App() {
     if ('clearAppBadge' in navigator) {
       navigator.clearAppBadge().catch(console.error);
     }
+    // Navigate to auth page after logout
+    navigate('/auth');
   };
 
   return (
@@ -346,6 +450,10 @@ export default function App() {
           onLogin={handleLogin}
           unreadCount={unreadCount}
           setUnreadCount={setUnreadCount}
+          currentBanner={currentBanner}
+          dismissBanner={dismissBanner}
+          onBannerInstallUpdate={handleBannerInstallUpdate}
+          onBannerChat={handleBannerChat}
         >
           <Routes>
             <Route path="/" element={<HomePage user={user} />} />
@@ -370,7 +478,19 @@ export default function App() {
   );
 }
 
-function Layout({ children, user, business, onLogout, onLogin, unreadCount, setUnreadCount }: { children: React.ReactNode; user: UserType | null; business: Business | null; onLogout: () => void; onLogin: (userData: UserType) => void; unreadCount: number; setUnreadCount: (count: number) => void }) {
+function Layout({ children, user, business, onLogout, onLogin, unreadCount, setUnreadCount, currentBanner, dismissBanner, onBannerInstallUpdate, onBannerChat }: {
+  children: React.ReactNode;
+  user: UserType | null;
+  business: Business | null;
+  onLogout: () => void;
+  onLogin: (userData: UserType) => void;
+  unreadCount: number;
+  setUnreadCount: (count: number) => void;
+  currentBanner: BannerData | null;
+  dismissBanner: () => void;
+  onBannerInstallUpdate: () => void;
+  onBannerChat: () => void;
+}) {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
   const { currency, setCurrency } = useCurrency();
@@ -387,6 +507,16 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
 
   return (
     <div className="flex flex-col min-h-screen">
+      {/* Banner */}
+      {currentBanner && (
+        <Banner
+          banner={currentBanner}
+          onClose={dismissBanner}
+          onInstallUpdate={currentBanner.type === 'update' ? onBannerInstallUpdate : undefined}
+          onChat={currentBanner.type === 'welcome' ? onBannerChat : undefined}
+        />
+      )}
+
       {/* Top Navigation Bar - Always Visible */}
       <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-sm">
         <div className="flex items-center gap-3">

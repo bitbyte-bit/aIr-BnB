@@ -42,6 +42,14 @@ export default function Home({ user }: { user: User | null }) {
   const [cart, setCart] = useState<Item[]>([]);
   const [showCart, setShowCart] = useState(false);
 
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isChatting, setIsChatting] = useState(false);
+  const [userMessages, setUserMessages] = useState<Message[]>([]);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [searchedUsers, setSearchedUsers] = useState<User[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [showAllUsers, setShowAllUsers] = useState(false);
+
   const itemsRef = React.useRef(items);
   itemsRef.current = items;
 
@@ -97,6 +105,9 @@ export default function Home({ user }: { user: User | null }) {
       if (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id) {
         setMessages(prev => [...prev, msg]);
       }
+      if (selectedUser && (msg.sender_id === selectedUser.id || msg.receiver_id === selectedUser.id)) {
+        setUserMessages(prev => [...prev, msg]);
+      }
     });
 
     socket.on('notification', (data) => {
@@ -116,7 +127,7 @@ export default function Home({ user }: { user: User | null }) {
       socket.off('message');
       socket.off('notification');
     };
-  }, [selectedBusiness, user?.id]);
+  }, [selectedBusiness, selectedUser, user?.id]);
 
   useEffect(() => {
     if (itemId && items.length > 0) {
@@ -361,34 +372,126 @@ export default function Home({ user }: { user: User | null }) {
     }
   };
 
+  const fetchUserMessages = async () => {
+    if (!selectedUser) return;
+    try {
+      const res = await fetch(`/api/messages/${user?.id}/${selectedUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setUserMessages(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch user messages:", err);
+    }
+  };
+
+  const handleSendUserMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUser || (!newMessage.trim() && !attachment)) return;
+    try {
+      await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: user?.id,
+          receiver_id: selectedUser.id,
+          text: newMessage,
+          attachment
+        }),
+      });
+      setNewMessage('');
+      setAttachment(null);
+      fetchUserMessages();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const searchUsers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchedUsers([]);
+      return;
+    }
+    let type = 'name';
+    if (/^\+?\d+$/.test(query.replace(/\s/g, ''))) {
+      type = 'phone';
+    } else if (query.includes('@')) {
+      type = 'email';
+    }
+    try {
+      const res = await fetch(`/api/users/search?type=${type}&q=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchedUsers(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchAllUsers = async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsers(data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const addToCart = (item: Item) => {
-    if (item.type === 'service') {
+    if (item.type === 'product') {
       setCart(prev => {
         if (prev.find(cartItem => cartItem.id === item.id)) {
-          showToast('Service already in cart', 'info');
+          showToast('Product already in cart', 'info');
           return prev;
         } else {
-          showToast('Service added to cart', 'success');
+          showToast('Product added to cart', 'success');
           return [...prev, item];
         }
       });
     } else {
-      showToast('Only services can be added to cart', 'info');
+      showToast('Only products can be added to cart', 'info');
     }
   };
 
   const removeFromCart = (itemId: string) => {
     setCart(prev => prev.filter(item => item.id !== itemId));
-    showToast('Service removed from cart', 'success');
+    showToast('Product removed from cart', 'success');
   };
 
   const checkoutCart = async () => {
     if (cart.length === 0) return;
-    
+
     // For now, just show a message. In a real app, this would integrate with a payment system
-    showToast(`Checkout initiated for ${cart.length} service(s)`, 'success');
+    showToast(`Checkout initiated for ${cart.length} product(s)`, 'success');
     setCart([]);
     setShowCart(false);
+  };
+
+  const handleNegotiate = async (businessId: string) => {
+    try {
+      // Fetch business to get owner_id
+      const businessRes = await fetch(`/api/businesses/${businessId}`);
+      if (!businessRes.ok) throw new Error('Failed to fetch business');
+      const business = await businessRes.json();
+
+      // Fetch owner user details
+      const userRes = await fetch(`/api/profile/${business.owner_id}`);
+      if (!userRes.ok) throw new Error('Failed to fetch user');
+      const ownerUser = await userRes.json();
+
+      // Set selected user and open chat
+      setSelectedUser(ownerUser);
+      setIsChatting(true);
+      fetchUserMessages();
+      showToast('Negotiation chat opened with service provider', 'success');
+    } catch (err) {
+      console.error('Failed to start negotiation:', err);
+      showToast('Failed to start negotiation', 'error');
+    }
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -525,6 +628,14 @@ export default function Home({ user }: { user: User | null }) {
           <h1 className="text-3xl font-black tracking-tight text-neutral-900">Discover</h1>
           <p className="text-neutral-500 font-medium">Find the best local services and products.</p>
         </div>
+        {user && (
+          <button
+            onClick={() => setIsChatting(true)}
+            className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors shadow-lg"
+          >
+            <MessageSquare size={20} />
+          </button>
+        )}
       </header>
 
       {/* What are you looking for section */}
@@ -789,12 +900,12 @@ export default function Home({ user }: { user: User | null }) {
                       )}
                     </div>
                   )}
-                  {item.type === 'service' && item.price && (
-                    <div className="mt-2">
-                      <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
-                      <span className="text-xs text-neutral-500 ml-2">Service</span>
-                    </div>
-                  )}
+                   {item.type === 'product' && item.price && (
+                     <div className="mt-2">
+                       <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
+                       <span className="text-xs text-neutral-500 ml-2">Product</span>
+                     </div>
+                   )}
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5 text-neutral-400">
@@ -1130,6 +1241,158 @@ export default function Home({ user }: { user: User | null }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Chat Modal */}
+      <AnimatePresence>
+        {isChatting && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+            >
+              <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-neutral-900">Chat</h2>
+                <button
+                  onClick={() => { setIsChatting(false); setSelectedUser(null); setSearchedUsers([]); setAllUsers([]); setShowAllUsers(false); }}
+                  className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {!selectedUser ? (
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search by name, phone, or email"
+                        value={chatSearchQuery}
+                        onChange={(e) => {
+                          setChatSearchQuery(e.target.value);
+                          searchUsers(e.target.value);
+                        }}
+                        className="w-full pl-4 pr-10 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                      />
+                      <MessageSquare className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
+                    </div>
+
+                    {searchedUsers.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-sm font-bold text-neutral-600">Found Users</h3>
+                        {searchedUsers.map(u => (
+                          <div key={u.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors" onClick={() => { setSelectedUser(u); fetchUserMessages(); }}>
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                              {u.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-neutral-900">{u.name}</p>
+                              <p className="text-xs text-neutral-500">{u.email}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => { setShowAllUsers(!showAllUsers); if (!showAllUsers) fetchAllUsers(); }}
+                      className="w-full py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-bold"
+                    >
+                      {showAllUsers ? 'Hide All Users' : 'Show All Users'}
+                    </button>
+
+                    {showAllUsers && allUsers.length > 0 && (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        <h3 className="text-sm font-bold text-neutral-600">All Users</h3>
+                        {allUsers.filter(u => u.id !== user?.id).map(u => (
+                          <div key={u.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors" onClick={() => { setSelectedUser(u); fetchUserMessages(); }}>
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                              {u.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-bold text-neutral-900">{u.name}</p>
+                              <p className="text-xs text-neutral-500">{u.email}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl">
+                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
+                        {selectedUser.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-bold text-neutral-900">{selectedUser.name}</p>
+                        <p className="text-xs text-neutral-500">{selectedUser.email}</p>
+                      </div>
+                      <button onClick={() => setSelectedUser(null)} className="ml-auto text-neutral-400 hover:text-neutral-600">
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
+                      {userMessages.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`max-w-[80%] p-3 rounded-2xl text-sm ${
+                            m.sender_id === user?.id
+                              ? 'bg-emerald-600 text-white self-end rounded-tr-none'
+                              : 'bg-white border border-neutral-200 text-neutral-900 self-start rounded-tl-none'
+                          }`}
+                        >
+                          {m.text && <p>{m.text}</p>}
+                          {m.attachment && (
+                            <img src={m.attachment} className="mt-2 rounded-lg max-h-32 object-cover" referrerPolicy="no-referrer" />
+                          )}
+                          <span className={`text-[10px] block mt-1 ${m.sender_id === user.id ? 'text-emerald-100' : 'text-neutral-400'}`}>
+                            {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <form onSubmit={handleSendUserMessage} className="space-y-2">
+                      {attachment && (
+                        <div className="relative inline-block">
+                          <img src={attachment} className="w-16 h-16 rounded-lg object-cover" />
+                          <button onClick={() => setAttachment(null)} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full"><X size={10} /></button>
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <label className="p-3 bg-neutral-100 text-neutral-500 rounded-xl hover:bg-neutral-200 cursor-pointer transition-colors">
+                          <Paperclip size={20} />
+                          <input type="file" className="hidden" onChange={handleFileChange} accept="image/*" />
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Type a message..."
+                          value={newMessage}
+                          onChange={(e) => setNewMessage(e.target.value)}
+                          className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                        />
+                        <button type="submit" className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors">
+                          <Send size={20} />
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Product Detail Modal - Full Window */}
       <AnimatePresence>
         {selectedItem && (
@@ -1299,11 +1562,13 @@ export default function Home({ user }: { user: User | null }) {
       </AnimatePresence>
 
       {/* Review Modal */}
-      <ReviewModal 
-        item={reviewItem} 
-        user={user} 
-        isOpen={isReviewModalOpen} 
+      <ReviewModal
+        item={reviewItem}
+        user={user}
+        isOpen={isReviewModalOpen}
         onClose={() => { setIsReviewModalOpen(false); setReviewItem(null); }}
+        addToCart={addToCart}
+        onNegotiate={handleNegotiate}
       />
     </div>
     </>

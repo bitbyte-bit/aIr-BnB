@@ -7,6 +7,7 @@ export interface User {
   role: 'user' | 'admin';
   status: 'active' | 'warned' | 'suspended' | 'banned';
   business_id?: number;
+  created_at: string;
 }
 
 export interface BillingPlan {

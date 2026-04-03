@@ -32,14 +32,15 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [businessItems, setBusinessItems] = useState<any[]>([]);
   const [requestingApproval, setRequestingApproval] = useState(false);
-  const [newItem, setNewItem] = useState({ 
-    title: '', 
-    description: '', 
+  const [newItem, setNewItem] = useState({
+    title: '',
+    description: '',
     image_url: '',
     gallery: [] as string[],
     customFields: [] as { key: string; value: string }[],
     type: 'product' as 'product' | 'service',
-    price: ''
+    price: '',
+    discount: ''
   });
   
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -251,15 +252,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const res = await fetch('/api/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          ...newItem, 
+        body: JSON.stringify({
+          ...newItem,
           business_id: business.id,
           gallery: JSON.stringify(newItem.gallery),
-          custom_fields: JSON.stringify(newItem.customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {}))
+          custom_fields: JSON.stringify(newItem.customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {})),
+          discount: newItem.discount || null
         }),
       });
       if (res.ok) {
-        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [], type: 'product', price: '' });
+        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [], type: 'product', price: '', discount: '' });
         showToast('Item posted successfully!', 'success');
         fetchAnalytics();
         fetchBusinessItems();
@@ -955,6 +957,20 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Discount (%)</label>
+                <input
+                  type="number"
+                  disabled={!business.is_approved}
+                  value={newItem.discount}
+                  onChange={(e) => setNewItem({ ...newItem, discount: e.target.value })}
+                  placeholder="0"
+                  min="0"
+                  max="100"
+                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
+                />
+              </div>
+
               {/* Gallery Upload */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Product Gallery</label>
@@ -1083,9 +1099,19 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                         </button>
                       </div>
                     </div>
-                    <div className="p-4">
-                      <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
-                      <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
+                     <div className="p-4">
+                       <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
+                       <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
+                       {item.price && (
+                         <div className="mt-2 flex items-center gap-2">
+                           <span className="text-sm font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
+                           {item.discount && parseInt(item.discount) > 0 && (
+                             <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
+                               {item.discount}% OFF
+                             </span>
+                           )}
+                         </div>
+                       )}
                       <div className="mt-4 flex items-center justify-between">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                           {new Date(item.created_at).toLocaleDateString()}

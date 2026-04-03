@@ -59,6 +59,15 @@ export const playNotificationSound = (): void => {
 };
 
 /**
+ * Play a chat message sound with a different tone sequence
+ */
+export const playChatSound = (): void => {
+  // Different sequence for chat messages
+  playBeep(600, 150, 'sine');
+  setTimeout(() => playBeep(800, 150, 'sine'), 200);
+};
+
+/**
  * Vibrate the device
  * @param pattern - Vibration pattern (default: [200, 100, 200])
  */
@@ -78,5 +87,22 @@ export const vibrateDevice = (pattern: number[] = [200, 100, 200]): void => {
  */
 export const playNotificationAlert = (): void => {
   playNotificationSound();
+  vibrateDevice();
+};
+
+/**
+ * Play chat sound and vibrate
+ * This works when the app is OPEN
+ */
+export const playChatAlert = (): void => {
+  playChatSound();
+  vibrateDevice();
+};
+
+/**
+ * Play system alert (only vibration, no sound)
+ * This works when the app is OPEN
+ */
+export const playSystemAlert = (): void => {
   vibrateDevice();
 };

@@ -378,7 +378,7 @@ export default function BillingModal({ isOpen, onClose, businessId, businessName
                       </p>
                       {selectedPlan && (
                         <p className="text-lg font-black text-emerald-600">
-                          {formatPrice(getPrice(selectedPlan))}
+                          {formatCurrency(getPrice(selectedPlan))}
                           {selectedDuration !== 'lifetime' && `/${selectedDuration === 'monthly' ? 'mo' : 'yr'}`}
                         </p>
                       )}

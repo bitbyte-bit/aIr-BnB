@@ -52,18 +52,48 @@ self.addEventListener('push', (event) => {
   }
   
   // Enhanced vibration pattern for more noticeable alerts
+  const notificationType = data.data?.type || 'default';
+
+  let vibratePattern = [300, 150, 300, 150, 500];
+  let sound = 'default';
+
+  // Customize based on notification type
+  switch (notificationType) {
+    case 'new_item':
+      // Item posted: sound and vibration
+      vibratePattern = [300, 150, 300, 150, 500];
+      sound = 'default';
+      break;
+    case 'chat':
+      // Chat message: different sound and vibration
+      vibratePattern = [200, 100, 200, 100, 400];
+      sound = 'default'; // Different sound not supported in push notifications, this is the same
+      break;
+    case 'system':
+    case 'success':
+    case 'error':
+      // System notifications: only vibration, no sound
+      vibratePattern = [100, 50, 100, 50, 100];
+      sound = undefined; // No sound
+      break;
+    default:
+      // Default notification
+      vibratePattern = [300, 150, 300, 150, 500];
+      sound = 'default';
+  }
+
   const options = {
     body: data.body,
     icon: data.icon || '/icon-192.png',
     badge: data.badge || '/icon-72.png',
     tag: data.tag || 'default',
     data: data.data || {},
-    // Vibration pattern: [vibrate, pause, vibrate, pause, vibrate]
-    vibrate: [300, 150, 300, 150, 500],
+    // Vibration pattern
+    vibrate: vibratePattern,
     requireInteraction: true,
     // Sound - works on some platforms (Android Chrome)
     // Note: iOS Safari does not support custom sounds in push notifications
-    sound: 'default',
+    ...(sound && { sound }),
     actions: [
       { action: 'view', title: 'View' },
       { action: 'dismiss', title: 'Dismiss' }
