@@ -23,6 +23,12 @@ interface BannerProps {
 }
 
 export default function Banner({ banner, onClose, onInstallUpdate, onChat }: BannerProps) {
+  // Defensive checks for required banner properties
+  if (!banner || !banner.title || !banner.message) {
+    console.error('Banner component received invalid banner data:', banner);
+    return null;
+  }
+
   const handleButtonClick = () => {
     if (banner.type === 'update' && onInstallUpdate) {
       onInstallUpdate();
@@ -50,7 +56,10 @@ export default function Banner({ banner, onClose, onInstallUpdate, onChat }: Ban
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -100, opacity: 0 }}
       className="relative z-50"
-      style={{ backgroundColor: banner.backgroundColor, color: banner.textColor }}
+      style={{
+        backgroundColor: banner.backgroundColor || '#3b82f6',
+        color: banner.textColor || '#ffffff'
+      }}
     >
       <div className="px-4 py-3">
         <div className="flex items-center justify-between max-w-7xl mx-auto">

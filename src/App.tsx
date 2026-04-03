@@ -58,8 +58,10 @@ export default function App() {
   const [dismissedBanners, setDismissedBanners] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('dismissed_banners');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('Error parsing dismissed banners from localStorage:', error);
       return [];
     }
   });
@@ -149,15 +151,24 @@ export default function App() {
       const res = await fetch('/api/banners/active');
       if (res.ok) {
         const data = await res.json();
-        setBanners(data);
+        // Validate that data is an array
+        if (Array.isArray(data)) {
+          setBanners(data);
+        } else {
+          console.error('Invalid banner data received:', data);
+          setBanners([]);
+        }
+      } else {
+        console.error('Failed to fetch banners:', res.status);
       }
     } catch (err) {
       console.error('Error fetching banners:', err);
+      setBanners([]);
     }
   };
 
   const showBanner = (banner: BannerData) => {
-    if (!dismissedBanners.includes(banner.id)) {
+    if (banner && banner.id && !dismissedBanners.includes(banner.id)) {
       setCurrentBanner(banner);
     }
   };
@@ -208,18 +219,22 @@ export default function App() {
 
   // Show welcome banner for new users
   useEffect(() => {
-    if (user && banners.length > 0) {
-      // Check if user is new (created within last 24 hours)
-      const userCreatedAt = new Date(user.created_at);
-      const now = new Date();
-      const hoursSinceCreation = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60);
+    if (user && banners.length > 0 && user.created_at) {
+      try {
+        // Check if user is new (created within last 24 hours)
+        const userCreatedAt = new Date(user.created_at);
+        const now = new Date();
+        const hoursSinceCreation = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60);
 
-      if (hoursSinceCreation < 24) {
-        const welcomeBanner = banners.find(b => b.type === 'welcome');
-        if (welcomeBanner) {
-          // Delay showing welcome banner to let user settle in
-          setTimeout(() => showBanner(welcomeBanner), 3000);
+        if (hoursSinceCreation < 24) {
+          const welcomeBanner = banners.find(b => b.type === 'welcome');
+          if (welcomeBanner) {
+            // Delay showing welcome banner to let user settle in
+            setTimeout(() => showBanner(welcomeBanner), 3000);
+          }
         }
+      } catch (error) {
+        console.error('Error checking user creation date:', error);
       }
     }
   }, [user, banners]);
@@ -508,7 +523,7 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
   return (
     <div className="flex flex-col min-h-screen">
       {/* Banner */}
-      {currentBanner && (
+      {currentBanner && currentBanner.id && (
         <Banner
           banner={currentBanner}
           onClose={dismissBanner}

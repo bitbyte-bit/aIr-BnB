@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AnalyticsData, User, Business } from '../types';
 import { useToast } from '../components/Toast';
 import { useCurrency } from '../context/CurrencyContext';
+import { BannerData } from '../components/Banner';
 import TermsPage from './Terms';
 import PrivacyPage from './Privacy';
 
@@ -31,18 +32,7 @@ interface UserDetails {
   recentItems: any[];
 }
 
-interface Banner {
-  id: string;
-  type: 'update' | 'welcome';
-  title: string;
-  message: string;
-  backgroundColor: string;
-  textColor: string;
-  buttonText?: string;
-  buttonUrl?: string;
-  isActive: boolean;
-  createdAt: string;
-}
+
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<'analytics' | 'users' | 'businesses' | 'billing' | 'subscriptions' | 'pending' | 'banners' | 'terms' | 'privacy'>('analytics');
@@ -56,8 +46,8 @@ export default function Admin() {
   const [pendingSubscriptions, setPendingSubscriptions] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserDetails | null>(null);
   const [userDetailsLoading, setUserDetailsLoading] = useState(false);
-  const [banners, setBanners] = useState<Banner[]>([]);
-  const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
+  const [banners, setBanners] = useState<BannerData[]>([]);
+  const [editingBanner, setEditingBanner] = useState<BannerData | null>(null);
   const [showBannerForm, setShowBannerForm] = useState(false);
   const [newItem, setNewItem] = useState({ 
     title: '', 
@@ -166,14 +156,23 @@ export default function Admin() {
         const res = await fetch('/api/admin/banners');
         if (res.ok) {
           const data = await res.json();
-          setBanners(data);
+          if (Array.isArray(data)) {
+            setBanners(data);
+          } else {
+            console.error('Invalid banner data received:', data);
+            setBanners([]);
+          }
+        } else {
+          console.error('Failed to fetch banners:', res.status);
+          setBanners([]);
         }
       } catch (err) {
         console.error('Error fetching banners:', err);
+        setBanners([]);
       }
     };
 
-    const createBanner = async (bannerData: Omit<Banner, 'id' | 'createdAt'>) => {
+    const createBanner = async (bannerData: Omit<BannerData, 'id' | 'createdAt'>) => {
       try {
         const res = await fetch('/api/admin/banners', {
           method: 'POST',
@@ -193,7 +192,7 @@ export default function Admin() {
       }
     };
 
-    const updateBanner = async (id: string, bannerData: Partial<Banner>) => {
+    const updateBanner = async (id: string, bannerData: Partial<BannerData>) => {
       try {
         const res = await fetch(`/api/admin/banners/${id}`, {
           method: 'PUT',
