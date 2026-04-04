@@ -148,6 +148,10 @@ export default function Home({ user }: { user: User | null }) {
   }, [selectedItem, itemId, navigate]);
 
   const handleShare = async (item: Item) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     const shareUrl = `${window.location.origin}/item/${item.id}`;
     const shareData = {
       title: item.title,
@@ -214,6 +218,10 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handleLike = async (itemId: string) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     try {
       await fetch(`/api/items/${itemId}/like`, {
         method: 'POST',
@@ -226,6 +234,10 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handlePostComment = async (itemId: string, attachment?: string | null) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     if (!newComment.trim() && !attachment) return;
     try {
       const res = await fetch(`/api/items/${itemId}/comments`, {
@@ -250,6 +262,10 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handleEditComment = async (commentId: number) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     if (!editText.trim()) return;
     try {
       const res = await fetch(`/api/comments/${commentId}`, {
@@ -439,6 +455,10 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const addToCart = (item: Item) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     if (item.type === 'product') {
       setCart(prev => {
         if (prev.find(cartItem => cartItem.id === item.id)) {
@@ -469,6 +489,10 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handleNegotiate = async (businessId: string) => {
+    if (!user) {
+      requireAuth();
+      return;
+    }
     try {
       // Fetch business to get owner_id
       const businessRes = await fetch(`/api/businesses/${businessId}`);
@@ -577,14 +601,14 @@ export default function Home({ user }: { user: User | null }) {
               )}
               <p className="text-sm text-neutral-600 leading-relaxed">{comment.text}</p>
               <div className="flex items-center gap-3 mt-1">
-                <button 
-                  onClick={() => setReplyTo(comment)}
+                <button
+                  onClick={() => user ? setReplyTo(comment) : requireAuth()}
                   className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
                 >
                   Reply
                 </button>
-                {comment.user_id === user?.id && (
-                  <button 
+                {comment.user_id === user?.id && user && (
+                  <button
                     onClick={() => { setEditingComment(comment); setEditText(comment.text); }}
                     className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest hover:underline flex items-center gap-1"
                   >
