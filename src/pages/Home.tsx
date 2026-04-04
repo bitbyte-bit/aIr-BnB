@@ -861,7 +861,7 @@ export default function Home({ user }: { user: User | null }) {
             </button>
           </div>
         </div>
-        <div className={`${itemDisplayMode === 'list' ? 'space-y-6' : `grid gap-6 ${itemDisplayMode === 'grid-1' ? 'grid-cols-1' : itemDisplayMode === 'grid-2' ? 'grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}`}>
+        <div className={`${itemDisplayMode === 'list' ? 'space-y-6' : `grid gap-6 ${itemDisplayMode === 'grid-1' ? 'grid-cols-1' : itemDisplayMode === 'grid-2' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}`}>
         {items.map((item) => (
           <motion.div
             key={item.id}
@@ -921,22 +921,20 @@ export default function Home({ user }: { user: User | null }) {
                       )}
                     </div>
                   )}
-                    {item.type === 'product' && item.price && (
-                      <div className="mt-2">
+                    {item.price && (
+                      <div className="mt-2 flex items-center gap-2">
                         <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
-                        <span className="text-xs text-neutral-500 ml-2">Product</span>
+                        {user && (
+                          <button
+                            onClick={() => addToCart(item)}
+                            className="mt-0 px-2 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        )}
                       </div>
                     )}
-                    {item.type === 'product' && user && (
-                      <button
-                        onClick={() => addToCart(item)}
-                        className="mt-2 px-3 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-1"
-                      >
-                        <ShoppingCart size={14} />
-                        Add to Cart
-                      </button>
-                    )}
-                    {item.type === 'service' && user && (
+                    {!item.price && user && (
                       <button
                         onClick={() => handleNegotiate(item.business_id!)}
                         className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
@@ -968,27 +966,26 @@ export default function Home({ user }: { user: User | null }) {
               </div>
               <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
               
-              <div className="flex items-center gap-4 pt-4 border-t border-neutral-100 mt-auto">
+              <div className="flex items-center justify-between pt-4 border-t border-neutral-100 mt-auto">
                 <button
                   onClick={() => toggleComments(item)}
-                  className={`flex items-center gap-2 transition-colors ${showCommentModal && selectedCommentItem?.id === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
+                  className={`flex items-center gap-1 transition-colors ${showCommentModal && selectedCommentItem?.id === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
                 >
-                  <MessageCircle size={18} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">{item.comments_count || 0}</span>
+                  <MessageCircle size={16} />
+                  <span className="text-xs font-semibold">{item.comments_count || 0}</span>
                 </button>
                 <button 
                   onClick={() => setSelectedItem(item)}
-                  className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
+                  className="flex items-center gap-1 text-neutral-500 hover:text-emerald-600 transition-colors"
                 >
-                  <Globe size={18} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">Explore</span>
+                  <Globe size={16} />
                 </button>
                 <button 
                   onClick={() => handleShare(item)}
-                  className="flex items-center gap-2 text-neutral-500 hover:text-emerald-600 transition-colors"
+                  className="flex items-center gap-1 text-neutral-500 hover:text-emerald-600 transition-colors"
                 >
-                  <Share2 size={18} />
-                  <span className="text-xs font-semibold uppercase tracking-wider">{item.shares_count || 0}</span>
+                  <Share2 size={16} />
+                  <span className="text-xs font-semibold">{item.shares_count || 0}</span>
                 </button>
               </div>
             </div>
