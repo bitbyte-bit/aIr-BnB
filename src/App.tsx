@@ -207,6 +207,8 @@ function AppContent() {
       socket.emit('join', user.id);
       // Register for push notifications after login
       registerPushNotifications(user.id);
+      // Fetch user's business data
+      fetchBusiness();
       // Navigate to home after login
       navigate('/');
     }

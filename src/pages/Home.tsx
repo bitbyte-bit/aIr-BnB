@@ -15,7 +15,8 @@ export default function Home({ user }: { user: User | null }) {
   const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeComments, setActiveComments] = useState<string | null>(null);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [selectedCommentItem, setSelectedCommentItem] = useState<Item | null>(null);
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
@@ -274,14 +275,10 @@ export default function Home({ user }: { user: User | null }) {
     }
   };
 
-  const toggleComments = (itemId: string) => {
-    if (activeComments === itemId) {
-      setActiveComments(null);
-      setReplyTo(null);
-    } else {
-      setActiveComments(itemId);
-      fetchComments(itemId);
-    }
+  const toggleComments = (item: Item) => {
+    setSelectedCommentItem(item);
+    setShowCommentModal(true);
+    fetchComments(item.id);
   };
 
   const openBusinessProfile = async (businessId: string) => {
@@ -930,9 +927,9 @@ export default function Home({ user }: { user: User | null }) {
               <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
               
               <div className="flex items-center gap-4 pt-4 border-t border-neutral-100 mt-auto">
-                <button 
-                  onClick={() => toggleComments(item.id)}
-                  className={`flex items-center gap-2 transition-colors ${activeComments === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
+                <button
+                  onClick={() => toggleComments(item)}
+                  className={`flex items-center gap-2 transition-colors ${showCommentModal && selectedCommentItem?.id === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
                 >
                   <MessageCircle size={18} />
                   <span className="text-xs font-semibold uppercase tracking-wider">{item.comments_count || 0}</span>
@@ -952,98 +949,125 @@ export default function Home({ user }: { user: User | null }) {
                   <span className="text-xs font-semibold uppercase tracking-wider">{item.shares_count || 0}</span>
                 </button>
               </div>
-
-              <AnimatePresence>
-                {activeComments === item.id && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="pt-6 space-y-4">
-                      <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
-                        {renderComments(item.id)}
-                        {(!comments[item.id] || comments[item.id].length === 0) && (
-                          <p className="text-center text-xs text-neutral-400 py-4 italic">No comments yet. Be the first!</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-2">
-                        {replyTo && (
-                          <div className="flex items-center justify-between px-3 py-1 bg-emerald-50 rounded-lg border border-emerald-100">
-                            <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">
-                              Replying to {replyTo.user_name}
-                            </span>
-                            <button 
-                              onClick={() => setReplyTo(null)}
-                              className="text-neutral-400 hover:text-neutral-600"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        )}
-                        <div className="flex gap-2 items-center">
-                          <input
-                            type="text"
-                            placeholder={replyTo ? "Write a reply..." : "Add a comment..."}
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handlePostComment(item.id)}
-                            className="flex-1 px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                          />
-                          <label className="p-2 text-neutral-400 hover:text-emerald-600 cursor-pointer transition-colors">
-                            <input
-                              type="file"
-                              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                              onChange={async (e) => {
-                                const file = e.target.files?.[0];
-                                if (file) {
-                                  // In production, upload to server/cloud storage
-                                  // For now, use base64 as placeholder
-                                  const reader = new FileReader();
-                                  reader.onload = () => {
-                                    setCommentAttachment(reader.result as string);
-                                  };
-                                  reader.readAsDataURL(file);
-                                }
-                              }}
-                              className="hidden"
-                            />
-                            <Paperclip size={18} />
-                          </label>
-                          {commentAttachment && (
-                            <div className="relative">
-                              <img src={commentAttachment} alt="Attachment" className="w-10 h-10 object-cover rounded-lg" />
-                              <button
-                                onClick={() => setCommentAttachment(null)}
-                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
-                              >
-                                <X size={12} />
-                              </button>
-                            </div>
-                          )}
-                          <button
-                            onClick={() => {
-                              handlePostComment(item.id);
-                              setCommentAttachment(null);
-                            }}
-                            className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                          >
-                            <Send size={18} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
             </div>
           </motion.div>
         ))}
       </div>
         </>
       )}
+
+      {/* Comment Modal */}
+      <AnimatePresence>
+        {showCommentModal && selectedCommentItem && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+            onClick={() => {
+              setShowCommentModal(false);
+              setSelectedCommentItem(null);
+              setReplyTo(null);
+              setNewComment('');
+              setCommentAttachment(null);
+            }}
+          >
+            <motion.div
+              initial={{ y: '100vh' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100vh' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[80vh] overflow-hidden flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-6 border-b border-neutral-100">
+                <h3 className="text-lg font-bold">Comments</h3>
+                <button
+                  onClick={() => {
+                    setShowCommentModal(false);
+                    setSelectedCommentItem(null);
+                    setReplyTo(null);
+                    setNewComment('');
+                    setCommentAttachment(null);
+                  }}
+                  className="p-2 text-neutral-400 hover:text-neutral-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {renderComments(selectedCommentItem.id)}
+                {(!comments[selectedCommentItem.id] || comments[selectedCommentItem.id].length === 0) && (
+                  <p className="text-center text-sm text-neutral-400 py-8 italic">No comments yet. Be the first!</p>
+                )}
+              </div>
+              <div className="p-6 border-t border-neutral-100 space-y-3">
+                {replyTo && (
+                  <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
+                      Replying to {replyTo.user_name}
+                    </span>
+                    <button
+                      onClick={() => setReplyTo(null)}
+                      className="text-neutral-400 hover:text-neutral-600"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    placeholder={replyTo ? "Write a reply..." : "Add a comment..."}
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePostComment(selectedCommentItem.id)}
+                    className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                  />
+                  <label className="p-3 text-neutral-400 hover:text-emerald-600 cursor-pointer transition-colors rounded-xl hover:bg-neutral-100">
+                    <input
+                      type="file"
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setCommentAttachment(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <Paperclip size={18} />
+                  </label>
+                  {commentAttachment && (
+                    <div className="relative">
+                      <img src={commentAttachment} alt="Attachment" className="w-10 h-10 object-cover rounded-lg" />
+                      <button
+                        onClick={() => setCommentAttachment(null)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => {
+                      handlePostComment(selectedCommentItem.id);
+                      setCommentAttachment(null);
+                    }}
+                    className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Business Profile Modal */}
       <AnimatePresence>

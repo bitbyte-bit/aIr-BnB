@@ -67,8 +67,13 @@ export default function Inbox({ user }: InboxProps) {
       const res = await fetch('/api/users/all');
       if (res.ok) {
         const data = await res.json();
+        console.log('Fetched users:', data);
         // Filter out current user
-        setUsers(data.filter((u: UserType) => u.id !== user?.id));
+        const filtered = data.filter((u: UserType) => u.id !== user?.id);
+        console.log('Filtered users:', filtered);
+        setUsers(filtered);
+      } else {
+        console.error('Failed to fetch users, status:', res.status);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);

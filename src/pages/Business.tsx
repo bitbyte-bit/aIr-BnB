@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2, Power } from 'lucide-react';
+import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2, Power, ShoppingCart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Business, Message, SocialHandle } from '../types';
 import ProfileCodes from '../components/ProfileCodes';
@@ -49,6 +49,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [billingStats, setBillingStats] = useState({ itemCount: 0, totalLikes: 0, needsBilling: false });
   const [editingItem, setEditingItem] = useState<any | null>(null);
+  const [cart, setCart] = useState<any[]>([]);
 
   useEffect(() => {
     fetchBusinessTypes();
@@ -75,68 +76,42 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     }
   }, [business, activeTab]);
 
-  const fetchBusinessTypes = async () => {
+  const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3, onSuccess: (data: any) => void, onError?: (err: any) => void) => {
     try {
-      const res = await fetch('/api/business-types');
+      const res = await fetch(url, options);
       if (res.ok) {
         const data = await res.json();
-        setAvailableTypes(data);
+        onSuccess(data);
+      } else {
+        throw new Error(`Request failed: ${res.status}`);
       }
     } catch (err) {
-      console.error("Failed to fetch business types:", err);
+      if (retries > 0) {
+        setTimeout(() => fetchWithRetry(url, options, retries - 1, onSuccess, onError), 1000);
+      } else {
+        console.error(`Failed to fetch from ${url}:`, err);
+        if (onError) onError(err);
+      }
     }
+  };
+
+  const fetchBusinessTypes = async () => {
+    fetchWithRetry('/api/business-types', {}, 0, (data) => setAvailableTypes(data));
   };
 
   const fetchBusinessItems = async (retries = 3) => {
     if (!business) return;
-    try {
-      const res = await fetch(`/api/businesses/${business.id}/items`);
-      if (res.ok) {
-        const data = await res.json();
-        setBusinessItems(Array.isArray(data) ? data : []);
-      } else {
-        setBusinessItems([]);
-      }
-    } catch (err) {
-      if (retries > 0) {
-        setTimeout(() => fetchBusinessItems(retries - 1), 1000);
-      } else {
-        console.error("Failed to fetch business items:", err);
-        setBusinessItems([]);
-      }
-    }
+    fetchWithRetry(`/api/businesses/${business.id}/items`, {}, retries, (data) => setBusinessItems(Array.isArray(data) ? data : []), () => setBusinessItems([]));
   };
 
   const fetchMessages = async (retries = 3) => {
     if (!business) return;
-    try {
-      const res = await fetch(`/api/messages/business/${business.id}`);
-      if (!res.ok) throw new Error('Failed to fetch messages');
-      const data = await res.json();
-      setMessages(data);
-    } catch (err) {
-      if (retries > 0) {
-        setTimeout(() => fetchMessages(retries - 1), 1000);
-      } else {
-        console.error("Failed to fetch messages:", err);
-      }
-    }
+    fetchWithRetry(`/api/messages/business/${business.id}`, {}, retries, (data) => setMessages(data));
   };
 
   const fetchAnalytics = async (retries = 3) => {
     if (!business) return;
-    try {
-      const res = await fetch(`/api/businesses/${business.id}/analytics`);
-      if (!res.ok) throw new Error('Failed to fetch analytics');
-      const data = await res.json();
-      setAnalytics(data);
-    } catch (err) {
-      if (retries > 0) {
-        setTimeout(() => fetchAnalytics(retries - 1), 1000);
-      } else {
-        console.error("Failed to fetch analytics:", err);
-      }
-    }
+    fetchWithRetry(`/api/businesses/${business.id}/analytics`, {}, retries, (data) => setAnalytics(data));
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -145,6 +120,22 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const reader = new FileReader();
       reader.onloadend = () => setter(reader.result as string);
       reader.readAsDataURL(file);
+    }
+  };
+
+  const addToCart = (item: any) => {
+    if (item.type === 'product') {
+      setCart(prev => {
+        if (prev.find(cartItem => cartItem.id === item.id)) {
+          showToast('Product already in cart', 'info');
+          return prev;
+        } else {
+          showToast('Product added to cart', 'success');
+          return [...prev, item];
+        }
+      });
+    } else {
+      showToast('Only products can be added to cart', 'info');
     }
   };
 
@@ -1072,7 +1063,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                 <p className="text-neutral-500">You haven't posted any items yet.</p>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 grid-cols-2">
                 {businessItems.map(item => (
                   <div key={item.id} className="bg-white rounded-3xl border border-neutral-200 overflow-hidden shadow-sm group">
                     <div className="aspect-square overflow-hidden relative">
@@ -1101,17 +1092,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                     </div>
                      <div className="p-4">
                        <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
-                       <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
-                       {item.price && (
-                         <div className="mt-2 flex items-center gap-2">
-                           <span className="text-sm font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
-                           {item.discount && parseInt(item.discount) > 0 && (
-                             <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">
-                               {item.discount}% OFF
-                             </span>
-                           )}
-                         </div>
-                       )}
+                        <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
                       <div className="mt-4 flex items-center justify-between">
                         <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
                           {new Date(item.created_at).toLocaleDateString()}

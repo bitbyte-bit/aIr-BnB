@@ -185,11 +185,11 @@ export default function ReviewModal({ item, user, isOpen, onClose, addToCart, on
                      <ShoppingCart size={20} />
                    </button>
                  )}
-                 {item.type === 'service' && onNegotiate && item.business_id && (
-                   <button
-                     onClick={() => onNegotiate(item.business_id!)}
-                     className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-colors"
-                   >
+                  {item.type === 'service' && onNegotiate && item.business_id && (
+                    <button
+                      onClick={() => onNegotiate(item.business_id!.toString())}
+                      className="p-3 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-colors"
+                    >
                      Negotiate
                    </button>
                  )}

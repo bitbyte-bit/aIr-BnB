@@ -446,6 +446,10 @@ try { db.exec("ALTER TABLE users ADD COLUMN reset_token TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN reset_expires DATETIME"); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN temp_password TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE users ADD COLUMN temp_password_expires DATETIME"); } catch (e) {}
+// Migration: Set status to 'active' for verified users
+try {
+  db.prepare("UPDATE users SET status = 'active' WHERE is_verified = 1 AND (status IS NULL OR status = '')").run();
+} catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN gallery TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN custom_fields TEXT"); } catch (e) {}
 try { db.exec("ALTER TABLE items ADD COLUMN business_id INTEGER REFERENCES businesses(id)"); } catch (e) {}
@@ -820,7 +824,7 @@ async function startServer() {
       
       // Update user as verified
       db.prepare(
-        "UPDATE users SET is_verified = 1, verification_token = NULL, verification_expires = NULL WHERE id = ?"
+        "UPDATE users SET is_verified = 1, status = 'active', verification_token = NULL, verification_expires = NULL WHERE id = ?"
       ).run(user.id);
       
       res.json({ message: "Email verified successfully", success: true });
