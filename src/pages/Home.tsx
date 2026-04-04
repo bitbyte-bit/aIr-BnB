@@ -819,6 +819,28 @@ export default function Home({ user }: { user: User | null }) {
                       </div>
                       <h3 className="text-xl font-bold text-neutral-900 mb-2">{item.title}</h3>
                       <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-4">{item.description}</p>
+                      {item.price && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>
+                          {user && (
+                            <button
+                              onClick={() => addToCart(item)}
+                              className="mt-0 px-2 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {!item.price && user && (
+                        <button
+                          onClick={() => handleNegotiate(item.business_id!)}
+                          className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
+                        >
+                          <MessageSquare size={14} />
+                          Negotiate
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
