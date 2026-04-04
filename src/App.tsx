@@ -517,6 +517,8 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
   const { currency, setCurrency } = useCurrency();
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
@@ -527,6 +529,29 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
       ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
     ] : []),
   ];
+
+  // Touch handlers for swipe to open drawer
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchEnd - touchStart;
+    const isLeftSwipe = distance < -50;
+    const isRightSwipe = distance > 50;
+
+    if (isRightSwipe && !isSideMenuOpen) {
+      setIsSideMenuOpen(true);
+    } else if (isLeftSwipe && isSideMenuOpen) {
+      setIsSideMenuOpen(false);
+    }
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -716,7 +741,12 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl mx-auto w-full p-4 pb-20 md:pb-24">
+      <main
+        className="flex-1 max-w-4xl mx-auto w-full p-4 pb-20 md:pb-24"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {children}
       </main>
 
