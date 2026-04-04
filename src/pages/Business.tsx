@@ -1094,13 +1094,40 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                        <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
                         <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
                       <div className="mt-4 flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-                          {new Date(item.created_at).toLocaleDateString()}
-                        </span>
-                        <div className={`flex items-center gap-1 ${item.is_active !== false ? 'text-emerald-600' : 'text-red-500'}`}>
-                          {item.is_active !== false ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                          <span className="text-[10px] font-bold uppercase">{item.is_active !== false ? 'Live' : 'Inactive'}</span>
-                        </div>
+                        {item.type === 'product' ? (
+                          <>
+                            <span className="text-lg font-bold text-emerald-600">UGX {item.price}</span>
+                            <button
+                              onClick={() => addToCart(item)}
+                              className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                              title="Add to Cart"
+                            >
+                              <ShoppingCart size={16} />
+                            </button>
+                          </>
+                        ) : item.type === 'service' ? (
+                          <>
+                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                              {new Date(item.created_at).toLocaleDateString()}
+                            </span>
+                            <button
+                              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                              title="Negotiate"
+                            >
+                              <MessageSquare size={16} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                              {new Date(item.created_at).toLocaleDateString()}
+                            </span>
+                            <div className={`flex items-center gap-1 ${item.is_active !== false ? 'text-emerald-600' : 'text-red-500'}`}>
+                              {item.is_active !== false ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
+                              <span className="text-[10px] font-bold uppercase">{item.is_active !== false ? 'Live' : 'Inactive'}</span>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
