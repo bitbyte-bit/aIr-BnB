@@ -1,28 +1,116 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users, Star, Grid3X3, List, Layout, ShoppingCart } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Plus, Send, X, CheckCircle, MapPin, Phone, Globe, Mail, UserPlus, UserMinus, MessageSquare, Paperclip, Edit2, Check, Briefcase, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import socket from '../socket';
-import { playNotificationAlert } from '../utils/notificationSound';
 import { Item, User, Comment, Business, Message } from '../types';
-import { useToast } from '../components/Toast';
-import OpenGraphMeta from '../components/OpenGraphMeta';
-import ReviewModal from '../components/ReviewModal';
 
-export default function Home({ user }: { user: User | null }) {
+const ItemCard = ({ 
+  item, 
+  onLike, 
+  onShare, 
+  onSelect, 
+  onBusinessClick 
+}: { 
+  item: Item; 
+  onLike: (id: string) => any; 
+  onShare: (item: Item) => any; 
+  onSelect: (item: Item) => any;
+  onBusinessClick: (id: number) => any;
+  key?: React.Key;
+}) => (
+  <motion.div
+    whileTap={{ scale: 0.98 }}
+    onClick={() => onSelect(item)}
+    className="group bg-white rounded-[2.5rem] overflow-hidden border border-neutral-100 shadow-sm hover:shadow-xl transition-all duration-500 flex flex-col cursor-pointer"
+  >
+    <div className="relative aspect-[4/5] overflow-hidden bg-neutral-50">
+      <img
+        src={item.image_url || `https://picsum.photos/seed/${item.id}/800/1000`}
+        alt={item.title}
+        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+        referrerPolicy="no-referrer"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      
+      {/* Quick Actions Overlay */}
+      <div className="absolute top-4 right-4 flex flex-col gap-2 translate-x-12 group-hover:translate-x-0 transition-transform duration-500">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onLike(item.id); }}
+          className="p-3 bg-white/90 backdrop-blur-xl rounded-2xl text-neutral-900 hover:bg-red-500 hover:text-white transition-all shadow-lg"
+        >
+          <Heart size={20} className={item.likes ? "fill-current" : ""} />
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onShare(item); }}
+          className="p-3 bg-white/90 backdrop-blur-xl rounded-2xl text-neutral-900 hover:bg-emerald-500 hover:text-white transition-all shadow-lg"
+        >
+          <Share2 size={20} />
+        </button>
+      </div>
+
+      {/* Business Tag */}
+      {item.business_name && (
+        <div className="absolute bottom-4 left-4">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onBusinessClick(item.business_id!); }}
+            className="px-3 py-1.5 bg-white/90 backdrop-blur-xl text-neutral-900 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-emerald-500 hover:text-white transition-all"
+          >
+            {item.business_name}
+          </button>
+        </div>
+      )}
+    </div>
+    
+    <div className="p-6 flex-1 flex flex-col">
+      <div className="flex items-start justify-between mb-2">
+        <h3 className="text-xl font-bold text-neutral-900 line-clamp-1">{item.title}</h3>
+        <div className="flex items-center gap-1 text-emerald-600">
+          <Users size={14} />
+          <span className="text-xs font-bold">{item.followers_count || 0}</span>
+        </div>
+      </div>
+      <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-4">{item.description}</p>
+      
+      <div className="mt-auto flex items-center gap-2 pt-4 border-t border-neutral-50">
+        <button 
+          onClick={(e) => { e.stopPropagation(); onSelect(item); }}
+          className="flex-1 py-2.5 bg-neutral-900 text-white rounded-2xl text-xs font-bold hover:bg-neutral-800 transition-all active:scale-95"
+        >
+          View Details
+        </button>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onSelect(item); /* Modal will show comments */ }}
+          className="p-2.5 bg-neutral-100 text-neutral-600 rounded-2xl hover:bg-emerald-50 hover:text-emerald-600 transition-all active:scale-95"
+        >
+          <MessageCircle size={18} />
+        </button>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <div className="flex items-center gap-1 text-red-500">
+          <Heart size={14} fill="currentColor" />
+          <span className="text-xs font-bold">{item.likes || 0}</span>
+        </div>
+        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+          {new Date(item.created_at).toLocaleDateString()}
+        </span>
+      </div>
+    </div>
+  </motion.div>
+);
+
+export default function Home({ user }: { user: User }) {
   const { itemId } = useParams();
-  const { showToast } = useToast();
   const navigate = useNavigate();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCommentModal, setShowCommentModal] = useState(false);
-  const [selectedCommentItem, setSelectedCommentItem] = useState<Item | null>(null);
+  const [activeComments, setActiveComments] = useState<string | null>(null);
   const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState<Comment | null>(null);
   const [editingComment, setEditingComment] = useState<Comment | null>(null);
   const [editText, setEditText] = useState('');
-  const [commentAttachment, setCommentAttachment] = useState<string | null>(null);
   
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
@@ -31,44 +119,16 @@ export default function Home({ user }: { user: User | null }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [attachment, setAttachment] = useState<string | null>(null);
-  const [liveActivities, setLiveActivities] = useState<{ id: number; text: string; type: string }[]>([]);
+  const [liveActivities, setLiveActivities] = useState<{ id: string; text: string; type: string }[]>([]);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<{ items: Item[]; businesses: Business[] } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const [reviewItem, setReviewItem] = useState<Item | null>(null);
-  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
-  const [itemDisplayMode, setItemDisplayMode] = useState<'grid-2' | 'grid-1' | 'list'>('grid-2');
-  const [cart, setCart] = useState<Item[]>([]);
-  const [showCart, setShowCart] = useState(false);
-
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [isChatting, setIsChatting] = useState(false);
-  const [userMessages, setUserMessages] = useState<Message[]>([]);
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
-  const [searchedUsers, setSearchedUsers] = useState<User[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [showAllUsers, setShowAllUsers] = useState(false);
-
-  const itemsRef = React.useRef(items);
-  itemsRef.current = items;
-
-  // Redirect to auth if trying to interact without login
-  const requireAuth = () => {
-    navigate('/auth');
-  };
-
   useEffect(() => {
     fetchItems();
 
     socket.on('engagement', ({ itemId, type, count, comment, userName }) => {
-      if (!itemId) return;
-
-      // Find the item and its owner
-      const item = itemsRef.current.find(i => i.id === itemId);
-      const ownerId = item?.owner_id;
-
       if (type === 'like') {
         setItems(prev => prev.map(item => 
           item.id === itemId ? { ...item, likes: count } : item
@@ -78,47 +138,29 @@ export default function Home({ user }: { user: User | null }) {
           ...prev,
           [itemId]: [...(prev[itemId] || []), comment]
         }));
-        setItems(prev => prev.map(item =>
-          item.id === itemId ? { ...item, comments_count: (item.comments_count || 0) + 1 } : item
-        ));
-      } else if (type === 'share') {
-        setItems(prev => prev.map(item =>
-          item.id === itemId ? { ...item, shares_count: count } : item
-        ));
       }
 
-      // Display notification over the user's header
-      if (ownerId) {
-        setLiveActivities(prev => [
-          ...prev,
-          {
-            id: Date.now(),
-            text: `${userName || 'Someone'} ${type}d your item: ${item?.title || 'an item'}`,
-            ownerId,
-            type
-          }
-        ]);
-      }
+      // Live Activity Toast
+      const activityId = Date.now().toString();
+      const item = items.find(i => i.id === itemId);
+      const activityText = type === 'like' 
+        ? `${userName || 'Someone'} liked ${item?.title || 'an item'}`
+        : `${userName || 'Someone'} commented on ${item?.title || 'an item'}`;
+      
+      setLiveActivities(prev => [...prev, { id: activityId, text: activityText, type }]);
+      setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
     });
 
     socket.on('message', (msg: Message) => {
-      if (!selectedBusiness) return;
-      if (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id) {
+      if (selectedBusiness && (msg.sender_id === selectedBusiness.owner_id || msg.receiver_id === selectedBusiness.owner_id)) {
         setMessages(prev => [...prev, msg]);
-      }
-      if (selectedUser && (msg.sender_id === selectedUser.id || msg.receiver_id === selectedUser.id)) {
-        setUserMessages(prev => [...prev, msg]);
       }
     });
 
     socket.on('notification', (data) => {
-      if (!user) return;
       if (data.receiver_id === user.id) {
-        playNotificationAlert();
-        
-        const activityId = Date.now();
-        const notificationText = data.text || data.body || 'New notification';
-        setLiveActivities(prev => [...prev, { id: activityId, text: notificationText, type: data.type || 'notification' }]);
+        const activityId = Date.now().toString();
+        setLiveActivities(prev => [...prev, { id: activityId, text: data.text, type: data.type || 'notification' }]);
         setTimeout(() => setLiveActivities(prev => prev.filter(a => a.id !== activityId)), 5000);
       }
     });
@@ -128,7 +170,7 @@ export default function Home({ user }: { user: User | null }) {
       socket.off('message');
       socket.off('notification');
     };
-  }, [selectedBusiness, selectedUser, user?.id]);
+  }, [selectedBusiness, items, user.id]);
 
   useEffect(() => {
     if (itemId && items.length > 0) {
@@ -148,26 +190,12 @@ export default function Home({ user }: { user: User | null }) {
   }, [selectedItem, itemId, navigate]);
 
   const handleShare = async (item: Item) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
     const shareUrl = `${window.location.origin}/item/${item.id}`;
     const shareData = {
       title: item.title,
       text: item.description,
       url: shareUrl,
     };
-
-    try {
-      await fetch(`/api/items/${item.id}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id })
-      });
-    } catch (err) {
-      console.error('Failed to track share:', err);
-    }
 
     if (navigator.share) {
       try {
@@ -180,7 +208,7 @@ export default function Home({ user }: { user: User | null }) {
     } else {
       try {
         await navigator.clipboard.writeText(shareUrl);
-        showToast('Link copied to clipboard!', 'success');
+        alert('Link copied to clipboard!');
       } catch (err) {
         console.error('Error copying link:', err);
       }
@@ -218,43 +246,33 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handleLike = async (itemId: string) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
     try {
       await fetch(`/api/items/${itemId}/like`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id }),
+        body: JSON.stringify({ userId: user.id }),
       });
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handlePostComment = async (itemId: string, attachment?: string | null) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
-    if (!newComment.trim() && !attachment) return;
+  const handlePostComment = async (itemId: string) => {
+    if (!newComment.trim()) return;
     try {
       const res = await fetch(`/api/items/${itemId}/comments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user?.id,
-          userName: user?.name,
+        body: JSON.stringify({ 
+          userId: user.id, 
+          userName: user.name, 
           text: newComment,
-          parentId: replyTo?.id,
-          attachment: attachment || commentAttachment
+          parentId: replyTo?.id
         }),
       });
       if (res.ok) {
         setNewComment('');
         setReplyTo(null);
-        setCommentAttachment(null);
       }
     } catch (err) {
       console.error(err);
@@ -262,10 +280,6 @@ export default function Home({ user }: { user: User | null }) {
   };
 
   const handleEditComment = async (commentId: number) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
     if (!editText.trim()) return;
     try {
       const res = await fetch(`/api/comments/${commentId}`, {
@@ -291,20 +305,24 @@ export default function Home({ user }: { user: User | null }) {
     }
   };
 
-  const toggleComments = (item: Item) => {
-    setSelectedCommentItem(item);
-    setShowCommentModal(true);
-    fetchComments(item.id);
+  const toggleComments = (itemId: string) => {
+    if (activeComments === itemId) {
+      setActiveComments(null);
+      setReplyTo(null);
+    } else {
+      setActiveComments(itemId);
+      fetchComments(itemId);
+    }
   };
 
-  const openBusinessProfile = async (businessId: string) => {
+  const openBusinessProfile = async (businessId: number) => {
     try {
       const res = await fetch(`/api/businesses/${businessId}`);
       if (!res.ok) throw new Error('Failed to fetch business');
       const data = await res.json();
       setSelectedBusiness(data);
       
-      const followRes = await fetch(`/api/businesses/${businessId}/follow-status/${user?.id}`);
+      const followRes = await fetch(`/api/businesses/${businessId}/follow-status/${user.id}`);
       if (followRes.ok) {
         const followData = await followRes.json();
         setIsFollowing(followData.isFollowing);
@@ -318,14 +336,14 @@ export default function Home({ user }: { user: User | null }) {
     if (!selectedBusiness) return;
     try {
       const method = isFollowing ? 'DELETE' : 'POST';
-      const url = isFollowing
-        ? `/api/businesses/${selectedBusiness.id}/follow/${user?.id}`
+      const url = isFollowing 
+        ? `/api/businesses/${selectedBusiness.id}/follow/${user.id}`
         : `/api/businesses/${selectedBusiness.id}/follow`;
       
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user?.id }),
+        body: JSON.stringify({ userId: user.id }),
       });
       if (res.ok) {
         setIsFollowing(!isFollowing);
@@ -345,7 +363,7 @@ export default function Home({ user }: { user: User | null }) {
   const fetchMessages = async () => {
     if (!selectedBusiness) return;
     try {
-      const res = await fetch(`/api/messages/${user?.id}/${selectedBusiness.owner_id}`);
+      const res = await fetch(`/api/messages/${user.id}/${selectedBusiness.owner_id}`);
       if (res.ok) {
         const data = await res.json();
         setMessages(data);
@@ -363,7 +381,7 @@ export default function Home({ user }: { user: User | null }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user?.id,
+          sender_id: user.id,
           receiver_id: selectedBusiness.owner_id,
           text: newMessage,
           attachment
@@ -382,136 +400,6 @@ export default function Home({ user }: { user: User | null }) {
       const reader = new FileReader();
       reader.onloadend = () => setAttachment(reader.result as string);
       reader.readAsDataURL(file);
-    }
-  };
-
-  const fetchUserMessages = async () => {
-    if (!selectedUser) return;
-    try {
-      const res = await fetch(`/api/messages/${user?.id}/${selectedUser.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setUserMessages(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch user messages:", err);
-    }
-  };
-
-  const handleSendUserMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUser || (!newMessage.trim() && !attachment)) return;
-    try {
-      await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sender_id: user?.id,
-          receiver_id: selectedUser.id,
-          text: newMessage,
-          attachment
-        }),
-      });
-      setNewMessage('');
-      setAttachment(null);
-      fetchUserMessages();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const searchUsers = async (query: string) => {
-    if (!query.trim()) {
-      setSearchedUsers([]);
-      return;
-    }
-    let type = 'name';
-    if (/^\+?\d+$/.test(query.replace(/\s/g, ''))) {
-      type = 'phone';
-    } else if (query.includes('@')) {
-      type = 'email';
-    }
-    try {
-      const res = await fetch(`/api/users/search?type=${type}&q=${encodeURIComponent(query)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSearchedUsers(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchAllUsers = async () => {
-    try {
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        setAllUsers(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const addToCart = (item: Item) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
-    if (item.type === 'product') {
-      setCart(prev => {
-        if (prev.find(cartItem => cartItem.id === item.id)) {
-          showToast('Product already in cart', 'info');
-          return prev;
-        } else {
-          showToast('Product added to cart', 'success');
-          return [...prev, item];
-        }
-      });
-    } else {
-      showToast('Only products can be added to cart', 'info');
-    }
-  };
-
-  const removeFromCart = (itemId: string) => {
-    setCart(prev => prev.filter(item => item.id !== itemId));
-    showToast('Product removed from cart', 'success');
-  };
-
-  const checkoutCart = async () => {
-    if (cart.length === 0) return;
-
-    // For now, just show a message. In a real app, this would integrate with a payment system
-    showToast(`Checkout initiated for ${cart.length} product(s)`, 'success');
-    setCart([]);
-    setShowCart(false);
-  };
-
-  const handleNegotiate = async (businessId: string) => {
-    if (!user) {
-      requireAuth();
-      return;
-    }
-    try {
-      // Fetch business to get owner_id
-      const businessRes = await fetch(`/api/businesses/${businessId}`);
-      if (!businessRes.ok) throw new Error('Failed to fetch business');
-      const business = await businessRes.json();
-
-      // Fetch owner user details
-      const userRes = await fetch(`/api/profile/${business.owner_id}`);
-      if (!userRes.ok) throw new Error('Failed to fetch user');
-      const ownerUser = await userRes.json();
-
-      // Set selected user and open chat
-      setSelectedUser(ownerUser);
-      setIsChatting(true);
-      fetchUserMessages();
-      showToast('Negotiation chat opened with service provider', 'success');
-    } catch (err) {
-      console.error('Failed to start negotiation:', err);
-      showToast('Failed to start negotiation', 'error');
     }
   };
 
@@ -567,48 +455,16 @@ export default function Home({ user }: { user: User | null }) {
             </div>
           ) : (
             <>
-              {comment.attachment && (
-                <div className="mb-2">
-                  {comment.attachment.match(/^data:image\/\w+/)?.[0] ? (
-                    <img 
-                      src={comment.attachment} 
-                      alt="Attachment" 
-                      className="max-w-full h-auto rounded-lg max-h-48 object-contain"
-                    />
-                  ) : comment.attachment.match(/^data:video\/\w+/)?.[0] ? (
-                    <video 
-                      src={comment.attachment} 
-                      controls 
-                      className="max-w-full h-auto rounded-lg max-h-48"
-                    />
-                  ) : comment.attachment.match(/^data:audio\/\w+/)?.[0] ? (
-                    <audio 
-                      src={comment.attachment} 
-                      controls 
-                      className="w-full"
-                    />
-                  ) : (
-                    <a 
-                      href={comment.attachment} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 bg-neutral-100 rounded-lg text-sm text-emerald-600 hover:bg-neutral-200"
-                    >
-                      <Paperclip size={14} /> View Attachment
-                    </a>
-                  )}
-                </div>
-              )}
               <p className="text-sm text-neutral-600 leading-relaxed">{comment.text}</p>
               <div className="flex items-center gap-3 mt-1">
-                <button
-                  onClick={() => user ? setReplyTo(comment) : requireAuth()}
+                <button 
+                  onClick={() => setReplyTo(comment)}
                   className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
                 >
                   Reply
                 </button>
-                {comment.user_id === user?.id && user && (
-                  <button
+                {comment.user_id === user.id && (
+                  <button 
                     onClick={() => { setEditingComment(comment); setEditText(comment.text); }}
                     className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest hover:underline flex items-center gap-1"
                   >
@@ -633,92 +489,103 @@ export default function Home({ user }: { user: User | null }) {
   }
 
   return (
-    <>
-      {selectedItem && (
-        <OpenGraphMeta
-          title={`${selectedItem.title} - Vitu`}
-          description={selectedItem.description}
-          image={selectedItem.image_url}
-          url={`${typeof window !== 'undefined' ? window.location.origin : ''}/item/${selectedItem.id}`}
-          type="article"
-        />
-      )}
-      <div className="space-y-8">
+    <div className="space-y-8">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-neutral-900">Discover</h1>
           <p className="text-neutral-500 font-medium">Find the best local services and products.</p>
         </div>
-        {user && (
-          <button
-            onClick={() => setIsChatting(true)}
-            className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors shadow-lg"
-          >
-            <MessageSquare size={20} />
-          </button>
-        )}
       </header>
 
-      {/* What are you looking for section */}
-      <section className="bg-emerald-600 rounded-[2.5rem] p-8 md:p-12 text-white shadow-xl shadow-emerald-100 overflow-hidden relative">
-        <div className="relative z-10 max-w-2xl">
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-6 leading-none">
-            What are you <br /> looking for?
-          </h2>
-          <form onSubmit={handleSearch} className="relative group">
-            <input
-              type="text"
-              placeholder="Search for retailers, motor spares, food..."
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                handleSearch(e);
-              }}
-              className="w-full pl-6 pr-16 py-5 bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder:text-white/60 focus:bg-white focus:text-neutral-900 focus:placeholder:text-neutral-400 outline-none transition-all shadow-lg"
-            />
-            <button 
-              type="submit"
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-3 bg-white text-emerald-600 rounded-xl hover:scale-105 active:scale-95 transition-all shadow-md group-focus-within:bg-emerald-600 group-focus-within:text-white"
-            >
-              {isSearching ? <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" /> : <Plus size={20} />}
-            </button>
-          </form>
-          <div className="flex flex-wrap gap-2 mt-6">
-            {['Retailer', 'Motor Spare', 'Blocker', 'Repairer', 'Transporter', 'Food Deliverer'].map(tag => (
-              <button 
-                key={tag}
-                onClick={() => { setSearchQuery(tag); }}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-full text-xs font-bold transition-colors border border-white/10"
+      {/* Search Header (Native Style) */}
+      <div className="sticky top-0 z-20 -mx-4 px-4 py-3 bg-white/80 backdrop-blur-xl border-b border-neutral-100 md:relative md:mx-0 md:px-0 md:bg-transparent md:backdrop-blur-none md:border-none">
+        <form onSubmit={handleSearch} className="relative group">
+          <input 
+            type="text" 
+            placeholder="Search items, businesses..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-neutral-100 border-none rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all text-sm"
+          />
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400">
+            <Plus size={20} className="rotate-45" /> {/* Search-like icon */}
+          </div>
+        </form>
+      </div>
+
+      {/* Hero Section (Native Style) */}
+      {!searchResults && (
+        <>
+          <section className="relative overflow-hidden rounded-[2.5rem] bg-neutral-900 text-white p-8 md:p-16 shadow-2xl shadow-emerald-900/20 mb-8">
+            <div className="relative z-10 max-w-2xl">
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-6 border border-emerald-500/20"
               >
-                {tag}
+                <CheckCircle size={12} />
+                Verified Local Businesses
+              </motion.div>
+              <motion.h1 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-4xl md:text-6xl font-black tracking-tight mb-6 leading-tight"
+              >
+                Discover your <br />
+                <span className="text-emerald-400">Neighborhood</span>
+              </motion.h1>
+              <p className="text-neutral-400 text-sm md:text-lg leading-relaxed mb-10 max-w-md">
+                Support local businesses, find unique products, and connect with your community in one place.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {['Handmade', 'Vintage', 'Art', 'Local'].map(tag => (
+                  <button 
+                    key={tag}
+                    onClick={() => { setSearchQuery(tag); }}
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-2xl text-xs font-bold transition-all border border-white/10 active:scale-95"
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/20 rounded-full -translate-y-1/2 translate-x-1/2 blur-[100px]" />
+            <div className="absolute bottom-0 left-0 w-64 h-64 bg-blue-500/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-[80px]" />
+          </section>
+
+          {/* Categories Filter (Native Horizontal Scroll) */}
+          <div className="mb-10 -mx-4 px-4 overflow-x-auto no-scrollbar flex gap-3">
+            {['All', 'Food', 'Fashion', 'Tech', 'Home', 'Beauty', 'Services', 'Art'].map((cat) => (
+              <button
+                key={cat}
+                className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all active:scale-95 ${
+                  cat === 'All' ? 'bg-neutral-900 text-white shadow-lg shadow-neutral-200' : 'bg-white border border-neutral-100 text-neutral-600 hover:bg-neutral-50'
+                }`}
+              >
+                {cat}
               </button>
             ))}
           </div>
-        </div>
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-400/20 rounded-full translate-y-1/2 -translate-x-1/2 blur-2xl" />
-      </section>
+        </>
+      )}
 
-      {/* Live Activity Toasts */}
-      <div className="fixed bottom-20 left-4 md:left-72 z-50 flex flex-col gap-2 pointer-events-none">
+      {/* Live Activity Toasts (Native Style) */}
+      <div className="fixed bottom-24 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none md:left-auto md:right-8 md:bottom-8 md:w-80">
         <AnimatePresence>
           {liveActivities.map((activity) => (
             <motion.div
               key={activity.id}
-              initial={{ opacity: 0, x: -20, scale: 0.9 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -20, scale: 0.9 }}
-              className="bg-white border border-neutral-100 px-5 py-4 rounded-[2rem] shadow-xl flex items-center gap-4 min-w-[300px] pointer-events-auto"
+              initial={{ opacity: 0, y: 20, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white/90 backdrop-blur-xl border border-neutral-200 px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 pointer-events-auto"
             >
-              <div className={`p-2.5 rounded-full flex-shrink-0 ${
-                activity.type === 'like' ? 'bg-red-50 text-red-500' : 
-                'bg-blue-50 text-blue-500'
+              <div className={`p-2 rounded-xl flex-shrink-0 ${
+                activity.type === 'like' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'
               }`}>
-                {activity.type === 'like' ? <Heart size={18} fill="currentColor" /> : 
-                 <MessageSquare size={18} />}
+                {activity.type === 'like' ? <Heart size={16} fill="currentColor" /> : <MessageSquare size={16} />}
               </div>
-              <p className="text-sm font-bold text-neutral-800 leading-tight">{activity.text}</p>
+              <p className="text-xs font-bold text-neutral-800 leading-tight">{activity.text}</p>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -727,40 +594,32 @@ export default function Home({ user }: { user: User | null }) {
       {searchResults ? (
         <div className="space-y-10">
           <div className="flex items-center justify-between">
-            <h3 className="text-xl font-bold text-neutral-900">Search Results for "{searchQuery}"</h3>
+            <h3 className="text-xl font-bold text-neutral-900">Results for "{searchQuery}"</h3>
             <button 
               onClick={() => { setSearchResults(null); setSearchQuery(''); }}
               className="text-sm font-bold text-emerald-600 hover:underline"
             >
-              Clear Results
+              Clear
             </button>
           </div>
 
           {searchResults.businesses.length > 0 && (
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Businesses</h4>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {searchResults.businesses.map(biz => (
-                  <motion.div
+                  <motion.div 
                     key={biz.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    onClick={() => openBusinessProfile(biz.id)}
-                    className="bg-white p-4 rounded-3xl border border-neutral-200 shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-4"
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => { setSelectedBusiness(biz); setIsMessaging(false); }}
+                    className="p-5 bg-white border border-neutral-100 rounded-[2rem] shadow-sm hover:shadow-md transition-all cursor-pointer flex items-center gap-4"
                   >
-                    <div className="w-16 h-16 rounded-2xl bg-neutral-100 overflow-hidden flex-shrink-0">
-                      {biz.logo ? (
-                        <img src={biz.logo} alt={biz.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-neutral-400"><Briefcase size={24} /></div>
-                      )}
+                    <div className="w-14 h-14 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-bold text-xl">
+                      {biz.name[0]}
                     </div>
                     <div>
                       <h5 className="font-bold text-neutral-900">{biz.name}</h5>
                       <p className="text-xs text-neutral-500 line-clamp-1">{biz.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-600 text-[10px] font-bold rounded-md uppercase tracking-wider">{biz.type}</span>
-                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -771,78 +630,16 @@ export default function Home({ user }: { user: User | null }) {
           {searchResults.items.length > 0 && (
             <div className="space-y-4">
               <h4 className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Products & Services</h4>
-              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid gap-6 sm:grid-cols-2">
                 {searchResults.items.map(item => (
-                  <div key={item.id} className={`bg-white rounded-[2.5rem] border-2 overflow-hidden shadow-sm hover:shadow-xl transition-all group ${
-                    item.subscription_plan === 'Lifetime' ? 'border-yellow-400' :
-                    item.subscription_plan === 'Standard' ? 'border-emerald-500' :
-                    item.subscription_plan === 'Starter' ? 'border-orange-400' :
-                    item.subscription_status === 'active' ? 'border-neutral-200' : 'border-red-400'
-                  }`}>
-                    <div className="relative aspect-square overflow-hidden">
-                      <img 
-                        src={item.image_url} 
-                        alt={item.title} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 cursor-pointer"
-                        referrerPolicy="no-referrer"
-                        onClick={() => { setReviewItem(item); setIsReviewModalOpen(true); }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute top-4 right-4 flex flex-col gap-2">
-                        <button 
-                          onClick={() => handleLike(item.id)}
-                          className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 hover:bg-emerald-600 hover:text-white transition-all shadow-lg flex items-center gap-2"
-                        >
-                          <Heart size={20} className={item.likes ? 'fill-current' : ''} />
-                          <span className="text-sm font-bold">{item.likes || 0}</span>
-                        </button>
-                        <div className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 shadow-lg flex items-center gap-2">
-                          <Users size={20} className="text-emerald-600" />
-                          <span className="text-sm font-bold">{item.followers_count || 0}</span>
-                        </div>
-                        {item.average_rating ? (
-                          <div className="p-3 bg-white/80 backdrop-blur-md rounded-2xl text-neutral-900 shadow-lg flex items-center gap-2">
-                            <Star size={20} className="text-yellow-500 fill-yellow-500" />
-                            <span className="text-sm font-bold">{Number(item.average_rating).toFixed(1)}</span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="p-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <button 
-                          onClick={() => item.business_id && openBusinessProfile(item.business_id)}
-                          className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
-                        >
-                          {item.business_name}
-                        </button>
-                      </div>
-                      <h3 className="text-xl font-bold text-neutral-900 mb-2">{item.title}</h3>
-                      <p className="text-sm text-neutral-500 line-clamp-2 leading-relaxed mb-4">{item.description}</p>
-                      {item.type === 'product' && (
-                        <div className="mt-2 flex items-center gap-2">
-                          {item.price && <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>}
-                          {user && (
-                            <button
-                              onClick={() => addToCart(item)}
-                              className="px-2 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center"
-                            >
-                              <Plus size={14} />
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {item.type === 'service' && user && (
-                        <button
-                          onClick={() => handleNegotiate(item.business_id!)}
-                          className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                        >
-                          <MessageSquare size={14} />
-                          Negotiate
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <ItemCard 
+                    key={item.id} 
+                    item={item} 
+                    onLike={handleLike}
+                    onShare={handleShare}
+                    onSelect={setSelectedItem}
+                    onBusinessClick={openBusinessProfile}
+                  />
                 ))}
               </div>
             </div>
@@ -859,387 +656,213 @@ export default function Home({ user }: { user: User | null }) {
           )}
         </div>
       ) : (
-        <>
-          <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-xl font-bold text-neutral-900">Discover Items</h2>
-            <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-neutral-200">
-              <button
-                onClick={() => setItemDisplayMode('grid-2')}
-                className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-2' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
-              >
-              <Grid3X3 size={18} />
-            </button>
-            <button
-              onClick={() => setItemDisplayMode('grid-1')}
-              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'grid-1' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
-            >
-              <Layout size={18} />
-            </button>
-            <button
-              onClick={() => setItemDisplayMode('list')}
-              className={`p-2 rounded-lg transition-all ${itemDisplayMode === 'list' ? 'bg-emerald-100 text-emerald-600' : 'text-neutral-400 hover:text-neutral-600'}`}
-            >
-              <List size={18} />
-            </button>
+        <div className="space-y-10">
+          {/* Featured Businesses (Native Horizontal Scroll) */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-lg font-bold text-neutral-900">Local Businesses</h3>
+              <button className="text-xs font-bold text-emerald-600">See All</button>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-4 -mx-4 px-4 no-scrollbar">
+              {items.reduce((acc: Business[], item) => {
+                if (!acc.find(b => b.id === item.business_id)) {
+                  acc.push({ id: item.business_id, name: item.business_name, description: '', owner_id: item.owner_id } as Business);
+                }
+                return acc;
+              }, []).map(biz => (
+                <motion.div
+                  key={biz.id}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setSelectedBusiness(biz); setIsMessaging(false); }}
+                  className="flex-shrink-0 w-32 flex flex-col items-center gap-2"
+                >
+                  <div className="w-20 h-20 bg-white border border-neutral-100 rounded-[2rem] shadow-sm flex items-center justify-center text-emerald-600 font-bold text-2xl">
+                    {biz.name[0]}
+                  </div>
+                  <span className="text-xs font-bold text-neutral-900 text-center line-clamp-1">{biz.name}</span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* Main Feed (Native Style) */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-neutral-900 px-1">Recent Discoveries</h3>
+            <div className="grid gap-6 sm:grid-cols-2">
+              {loading ? (
+                Array(4).fill(0).map((_, i) => (
+                  <div key={i} className="bg-white rounded-[2.5rem] h-80 animate-pulse border border-neutral-100" />
+                ))
+              ) : (
+                items.map(item => (
+                  <ItemCard 
+                    key={item.id} 
+                    item={item} 
+                    onLike={handleLike}
+                    onShare={handleShare}
+                    onSelect={setSelectedItem}
+                    onBusinessClick={openBusinessProfile}
+                  />
+                ))
+              )}
+            </div>
           </div>
         </div>
-        <div className={`${itemDisplayMode === 'list' ? 'space-y-6' : `grid gap-6 ${itemDisplayMode === 'grid-1' ? 'grid-cols-1' : itemDisplayMode === 'grid-2' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4'}`}`}>
-        {items.map((item) => (
-          <motion.div
-            key={item.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`group bg-white rounded-3xl overflow-hidden border-2 shadow-sm hover:shadow-xl transition-all duration-300 ${
-              itemDisplayMode === 'list' ? 'flex flex-row' : 'flex flex-col'
-            } ${
-              item.subscription_plan === 'Lifetime' ? 'border-yellow-400 shadow-yellow-100' :
-              item.subscription_plan === 'Standard' ? 'border-emerald-500 shadow-emerald-100' :
-              item.subscription_plan === 'Starter' ? 'border-orange-400 shadow-orange-100' :
-              item.subscription_status === 'active' ? 'border-neutral-200' : 'border-red-400 shadow-red-100'
-            }`}
-          >
-            <div className={`${
-              itemDisplayMode === 'list' ? 'w-32 h-32 sm:w-48 sm:h-48 flex-shrink-0' : 'aspect-[4/3]'
-            } overflow-hidden bg-neutral-100 ${
-              item.subscription_plan === 'Lifetime' ? 'ring-4 ring-yellow-100' :
-              item.subscription_plan === 'Standard' ? 'ring-4 ring-emerald-100' :
-              item.subscription_plan === 'Starter' ? 'ring-4 ring-orange-100' :
-              item.subscription_status === 'active' ? '' : 'ring-4 ring-red-100'
-            }`}>
-              <img
-                src={item.image_url || `https://picsum.photos/seed/${item.id}/800/600`}
-                alt={item.title}
-                className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500 cursor-pointer"
-                referrerPolicy="no-referrer"
-                onClick={() => { setReviewItem(item); setIsReviewModalOpen(true); }}
-              />
-            </div>
-            <div className="p-6 flex-1 flex flex-col">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <h3 className="text-xl font-bold text-neutral-900">{item.title}</h3>
-                  {item.business_name && (
-                    <div className="flex items-center gap-2 mt-1">
-                      <button 
-                        onClick={() => openBusinessProfile(item.business_id!)}
-                        className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 uppercase tracking-widest hover:underline"
-                      >
-                        By {item.business_name}
-                        {item.is_approved ? <CheckCircle size={12} className="fill-emerald-100" /> : null}
-                      </button>
-                      {item.subscription_plan && (
-                        <span className={`px-2 py-0.5 text-[8px] font-bold rounded-full uppercase ${
-                          item.subscription_plan === 'Lifetime' ? 'bg-yellow-100 text-yellow-700' :
-                          item.subscription_plan === 'Standard' ? 'bg-emerald-100 text-emerald-700' :
-                          'bg-orange-100 text-orange-700'
-                        }`}>
-                          {item.subscription_plan}
-                        </span>
-                      )}
-                      {!item.subscription_status && (
-                        <span className="px-2 py-0.5 text-[8px] font-bold rounded-full bg-red-100 text-red-700 uppercase">
-                          Free
-                        </span>
-                      )}
-                    </div>
-                    )}
-                    {item.type === 'product' && (
-                      <div className="mt-2 flex items-center gap-2">
-                        {item.price && <span className="text-lg font-bold text-emerald-600">UGX {parseInt(item.price).toLocaleString()}</span>}
-                        {user && (
-                          <button
-                            onClick={() => addToCart(item)}
-                            className="px-2 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center"
-                          >
-                            <Plus size={14} />
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {item.type === 'service' && user && (
-                      <button
-                        onClick={() => handleNegotiate(item.business_id!)}
-                        className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1"
-                      >
-                        <MessageSquare size={14} />
-                        Negotiate
-                      </button>
-                    )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5 text-neutral-400">
-                    <Users size={18} className="text-emerald-500" />
-                    <span className="text-sm font-medium">{item.followers_count || 0}</span>
-                  </div>
-                  {item.average_rating ? (
-                    <div className="flex items-center gap-1 text-yellow-500">
-                      <Star size={18} className="fill-current" />
-                      <span className="text-sm font-medium">{Number(item.average_rating).toFixed(1)}</span>
-                    </div>
-                  ) : null}
-                  <button
-                    onClick={() => handleLike(item.id)}
-                    className="flex items-center gap-1.5 text-neutral-400 hover:text-red-500 transition-colors"
-                  >
-                    <Heart size={20} className={item.likes ? "fill-red-500 text-red-500" : ""} />
-                    <span className="text-sm font-medium">{item.likes || 0}</span>
-                  </button>
-                </div>
-              </div>
-              <p className="text-neutral-600 text-sm line-clamp-2 mb-4">{item.description}</p>
-              
-              <div className="flex items-center justify-between pt-4 border-t border-neutral-100 mt-auto">
-                <button
-                  onClick={() => toggleComments(item)}
-                  className={`flex items-center gap-1 transition-colors ${showCommentModal && selectedCommentItem?.id === item.id ? 'text-emerald-600' : 'text-neutral-500 hover:text-emerald-600'}`}
-                >
-                  <MessageCircle size={16} />
-                  <span className="text-xs font-semibold">{item.comments_count || 0}</span>
-                </button>
-                <button 
-                  onClick={() => setSelectedItem(item)}
-                  className="flex items-center gap-1 text-neutral-500 hover:text-emerald-600 transition-colors"
-                >
-                  <Globe size={16} />
-                </button>
-                <button 
-                  onClick={() => handleShare(item)}
-                  className="flex items-center gap-1 text-neutral-500 hover:text-emerald-600 transition-colors"
-                >
-                  <Share2 size={16} />
-                  <span className="text-xs font-semibold">{item.shares_count || 0}</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-        </>
       )}
 
-      {/* Comment Modal */}
-      <AnimatePresence>
-        {showCommentModal && selectedCommentItem && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-60 bg-black/50 backdrop-blur-sm"
-            onClick={() => {
-              setShowCommentModal(false);
-              setSelectedCommentItem(null);
-              setReplyTo(null);
-              setNewComment('');
-              setCommentAttachment(null);
-            }}
-          >
-            <motion.div
-              initial={{ y: '100vh' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100vh' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl max-h-[80vh] overflow-hidden flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between p-6 border-b border-neutral-100">
-                <h3 className="text-lg font-bold">Comments</h3>
-                <button
-                  onClick={() => {
-                    setShowCommentModal(false);
-                    setSelectedCommentItem(null);
-                    setReplyTo(null);
-                    setNewComment('');
-                    setCommentAttachment(null);
-                  }}
-                  className="p-2 text-neutral-400 hover:text-neutral-600"
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {renderComments(selectedCommentItem.id)}
-                {(!comments[selectedCommentItem.id] || comments[selectedCommentItem.id].length === 0) && (
-                  <p className="text-center text-sm text-neutral-400 py-8 italic">No comments yet. Be the first!</p>
-                )}
-              </div>
-              <div className="p-6 border-t border-neutral-100 space-y-3">
-                {replyTo && (
-                  <div className="flex items-center justify-between px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-100">
-                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">
-                      Replying to {replyTo.user_name}
-                    </span>
-                    <button
-                      onClick={() => setReplyTo(null)}
-                      className="text-neutral-400 hover:text-neutral-600"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                )}
-                <div className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    placeholder={replyTo ? "Write a reply..." : "Add a comment..."}
-                    value={newComment}
-                    onChange={(e) => setNewComment(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handlePostComment(selectedCommentItem.id)}
-                    className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                  />
-                  <label className="p-3 text-neutral-400 hover:text-emerald-600 cursor-pointer transition-colors rounded-xl hover:bg-neutral-100">
-                    <input
-                      type="file"
-                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            setCommentAttachment(reader.result as string);
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    <Paperclip size={18} />
-                  </label>
-                  {commentAttachment && (
-                    <div className="relative">
-                      <img src={commentAttachment} alt="Attachment" className="w-10 h-10 object-cover rounded-lg" />
-                      <button
-                        onClick={() => setCommentAttachment(null)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => {
-                      handlePostComment(selectedCommentItem.id);
-                      setCommentAttachment(null);
-                    }}
-                    className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Business Profile Modal */}
+      {/* Business Profile Modal (Native Sheet Style) */}
       <AnimatePresence>
         {selectedBusiness && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm p-0 md:p-4 md:items-center"
+            onClick={() => { setSelectedBusiness(null); setIsMessaging(false); }}
           >
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="bg-white w-full max-w-lg rounded-t-[2.5rem] md:rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="relative h-32 bg-emerald-600">
+              {/* Handle */}
+              <div className="md:hidden flex justify-center pt-3 pb-1">
+                <div className="w-12 h-1.5 bg-neutral-200 rounded-full" />
+              </div>
+
+              <div className="relative h-40 bg-neutral-900">
+                {selectedBusiness.logo ? (
+                  <img src={selectedBusiness.logo} className="w-full h-full object-cover opacity-50" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full bg-emerald-600 opacity-50" />
+                )}
                 <button 
                   onClick={() => { setSelectedBusiness(null); setIsMessaging(false); }}
                   className="absolute top-4 right-4 p-2 bg-black/20 hover:bg-black/40 text-white rounded-full transition-colors"
                 >
                   <X size={20} />
                 </button>
-                <div className="absolute -bottom-10 left-8 w-24 h-24 rounded-3xl bg-white p-1 shadow-lg overflow-hidden">
-                  <div className="w-full h-full rounded-[1.25rem] bg-neutral-100 overflow-hidden">
-                    {selectedBusiness.logo && <img src={selectedBusiness.logo} className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+                <div className="absolute -bottom-12 left-8 w-28 h-28 rounded-[2rem] bg-white p-1.5 shadow-2xl">
+                  <div className="w-full h-full rounded-[1.5rem] bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-4xl">
+                    {selectedBusiness.name[0]}
                   </div>
                 </div>
               </div>
 
-              <div className="pt-14 px-8 pb-8 overflow-y-auto">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2">
-                      {selectedBusiness.name}
-                      {selectedBusiness.is_approved ? <CheckCircle size={20} className="text-emerald-500" /> : null}
-                    </h2>
-                    <p className="text-neutral-500 text-sm">{selectedBusiness.is_approved ? 'Verified Business' : 'Pending Verification'}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={handleFollow}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                        isFollowing ? 'bg-neutral-100 text-neutral-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'
-                      }`}
-                    >
-                      {isFollowing ? <UserMinus size={18} /> : <UserPlus size={18} />}
-                      {isFollowing ? 'Unfollow' : 'Follow'}
-                    </button>
-                    <button 
-                      onClick={() => { setIsMessaging(!isMessaging); if (!isMessaging) fetchMessages(); }}
-                      className={`p-2 rounded-xl transition-all ${isMessaging ? 'bg-emerald-100 text-emerald-600' : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'}`}
-                    >
-                      <MessageSquare size={20} />
-                    </button>
+              <div className="pt-16 px-8 pb-8 overflow-y-auto custom-scrollbar">
+                <div className="flex flex-col gap-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-3xl font-bold flex items-center gap-2 text-neutral-900">
+                        {selectedBusiness.name}
+                        {selectedBusiness.is_approved ? <CheckCircle size={24} className="text-emerald-500" /> : null}
+                      </h2>
+                      <p className="text-neutral-500 font-medium">
+                        {selectedBusiness.type || 'Local Business'} • Verified
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={handleFollow}
+                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-bold transition-all active:scale-95 ${
+                          isFollowing ? 'bg-neutral-100 text-neutral-600' : 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
+                        }`}
+                      >
+                        {isFollowing ? <UserMinus size={18} /> : <UserPlus size={18} />}
+                        {isFollowing ? 'Unfollow' : 'Follow'}
+                      </button>
+                      <button 
+                        onClick={() => { setIsMessaging(!isMessaging); if (!isMessaging) fetchMessages(); }}
+                        className={`p-3 rounded-2xl transition-all active:scale-95 ${isMessaging ? 'bg-emerald-100 text-emerald-600' : 'bg-neutral-100 text-neutral-600'}`}
+                      >
+                        <MessageSquare size={24} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <AnimatePresence mode="wait">
                   {isMessaging ? (
-                    <motion.div
+                    <motion.div 
                       key="messaging"
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20 }}
-                      className="space-y-4"
+                      className="flex flex-col h-[500px]"
                     >
-                      <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
-                        {messages.map((m) => (
-                          <div
-                            key={m.id}
-                            className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                              m.sender_id === user?.id
-                                ? 'bg-emerald-600 text-white self-end rounded-tr-none'
-                                : 'bg-white border border-neutral-200 text-neutral-900 self-start rounded-tl-none'
-                            }`}
-                          >
-                            {m.text && <p>{m.text}</p>}
-                            {m.attachment && (
-                              <img src={m.attachment} className="mt-2 rounded-lg max-h-32 object-cover" referrerPolicy="no-referrer" />
-                            )}
-                            <span className={`text-[10px] block mt-1 ${m.sender_id === user.id ? 'text-emerald-100' : 'text-neutral-400'}`}>
-                              {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-neutral-50/50 rounded-3xl mb-4">
+                        {messages.length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center text-center p-8">
+                            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mb-4">
+                              <MessageSquare size={32} />
+                            </div>
+                            <h3 className="text-lg font-bold text-neutral-900">Start a conversation</h3>
+                            <p className="text-sm text-neutral-500 max-w-[200px]">Ask about products, services, or just say hello!</p>
                           </div>
-                        ))}
-                      </div>
-                      <form onSubmit={handleSendMessage} className="space-y-2">
-                        {attachment && (
-                          <div className="relative inline-block">
-                            <img src={attachment} className="w-16 h-16 rounded-lg object-cover" />
-                            <button onClick={() => setAttachment(null)} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full"><X size={10} /></button>
-                          </div>
+                        ) : (
+                          messages.map((msg) => (
+                            <div 
+                              key={msg.id} 
+                              className={`flex ${msg.sender_id === user.id ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div className={`max-w-[80%] p-4 rounded-3xl text-sm shadow-sm ${
+                                msg.sender_id === user.id 
+                                  ? 'bg-emerald-600 text-white rounded-tr-none' 
+                                  : 'bg-white text-neutral-900 rounded-tl-none border border-neutral-100'
+                              }`}>
+                                {msg.attachment && (
+                                  <img 
+                                    src={msg.attachment} 
+                                    className="rounded-xl mb-2 max-h-48 w-full object-cover" 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                )}
+                                <p className="leading-relaxed">{msg.text}</p>
+                                <p className={`text-[10px] mt-2 font-medium ${msg.sender_id === user.id ? 'text-emerald-100' : 'text-neutral-400'}`}>
+                                  {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            </div>
+                          ))
                         )}
-                        <div className="flex gap-2">
-                          <label className="p-3 bg-neutral-100 text-neutral-500 rounded-xl hover:bg-neutral-200 cursor-pointer transition-colors">
+                      </div>
+                      
+                      <div className="p-4 bg-white border-t border-neutral-100">
+                        <form onSubmit={handleSendMessage} className="flex items-center gap-2 p-2 bg-neutral-50 rounded-[2rem] border border-neutral-200 focus-within:ring-2 focus-within:ring-emerald-500 transition-all">
+                          <label className="p-2.5 text-neutral-400 hover:text-emerald-600 cursor-pointer transition-colors">
                             <Paperclip size={20} />
                             <input type="file" className="hidden" onChange={handleFileChange} accept="image/*" />
                           </label>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             placeholder="Type a message..."
                             value={newMessage}
                             onChange={(e) => setNewMessage(e.target.value)}
-                            className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
+                            className="flex-1 bg-transparent border-none outline-none text-sm px-2"
                           />
-                          <button type="submit" className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors">
+                          <button 
+                            type="submit"
+                            disabled={!newMessage.trim() && !attachment}
+                            className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 disabled:opacity-50 disabled:hover:bg-emerald-600 transition-all active:scale-95"
+                          >
                             <Send size={20} />
                           </button>
-                        </div>
-                      </form>
+                        </form>
+                        {attachment && (
+                          <div className="mt-3 relative inline-block">
+                            <img src={attachment} className="h-20 w-20 object-cover rounded-2xl border-2 border-emerald-500" />
+                            <button 
+                              onClick={() => setAttachment(null)}
+                              className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full shadow-lg"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </motion.div>
                   ) : (
                     <motion.div
@@ -1298,10 +921,10 @@ export default function Home({ user }: { user: User | null }) {
                                   const handles = selectedBusiness.social_handles ? JSON.parse(selectedBusiness.social_handles) : [];
                                   if (Array.isArray(handles) && handles.length > 0) {
                                     return handles.map((h: any, i: number) => (
-                                      <a
-                                        key={i}
-                                        href={h.url?.startsWith('http') ? h.url : `https://${h.url}`}
-                                        target="_blank"
+                                      <a 
+                                        key={i} 
+                                        href={h.url.startsWith('http') ? h.url : `https://${h.url}`} 
+                                        target="_blank" 
                                         rel="noopener noreferrer"
                                         className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
                                       >
@@ -1309,9 +932,7 @@ export default function Home({ user }: { user: User | null }) {
                                       </a>
                                     ));
                                   }
-                                } catch (e) {
-                                  console.error('Error parsing social handles:', e);
-                                }
+                                } catch (e) {}
                                 return <p className="text-sm font-bold text-neutral-900">Not specified</p>;
                               })()}
                             </div>
@@ -1326,170 +947,23 @@ export default function Home({ user }: { user: User | null }) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Chat Modal */}
-      <AnimatePresence>
-        {isChatting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white w-full max-w-lg rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
-            >
-              <div className="p-6 border-b border-neutral-100 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-neutral-900">Chat</h2>
-                <button
-                  onClick={() => { setIsChatting(false); setSelectedUser(null); setSearchedUsers([]); setAllUsers([]); setShowAllUsers(false); }}
-                  className="p-2 hover:bg-neutral-100 rounded-full transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {!selectedUser ? (
-                  <div className="space-y-4">
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search by name, phone, or email"
-                        value={chatSearchQuery}
-                        onChange={(e) => {
-                          setChatSearchQuery(e.target.value);
-                          searchUsers(e.target.value);
-                        }}
-                        className="w-full pl-4 pr-10 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
-                      />
-                      <MessageSquare className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
-                    </div>
-
-                    {searchedUsers.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-sm font-bold text-neutral-600">Found Users</h3>
-                        {searchedUsers.map(u => (
-                          <div key={u.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors" onClick={() => { setSelectedUser(u); fetchUserMessages(); }}>
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
-                              {u.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-neutral-900">{u.name}</p>
-                              <p className="text-xs text-neutral-500">{u.email}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <button
-                      onClick={() => { setShowAllUsers(!showAllUsers); if (!showAllUsers) fetchAllUsers(); }}
-                      className="w-full py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-bold"
-                    >
-                      {showAllUsers ? 'Hide All Users' : 'Show All Users'}
-                    </button>
-
-                    {showAllUsers && allUsers.length > 0 && (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        <h3 className="text-sm font-bold text-neutral-600">All Users</h3>
-                        {allUsers.filter(u => u.id !== user?.id).map(u => (
-                          <div key={u.id} className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors" onClick={() => { setSelectedUser(u); fetchUserMessages(); }}>
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
-                              {u.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <p className="font-bold text-neutral-900">{u.name}</p>
-                              <p className="text-xs text-neutral-500">{u.email}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-xl">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold">
-                        {selectedUser.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-bold text-neutral-900">{selectedUser.name}</p>
-                        <p className="text-xs text-neutral-500">{selectedUser.email}</p>
-                      </div>
-                      <button onClick={() => setSelectedUser(null)} className="ml-auto text-neutral-400 hover:text-neutral-600">
-                        <X size={16} />
-                      </button>
-                    </div>
-
-                    <div className="h-64 bg-neutral-50 rounded-2xl p-4 overflow-y-auto flex flex-col gap-3">
-                      {userMessages.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`max-w-[80%] p-3 rounded-2xl text-sm ${
-                            m.sender_id === user?.id
-                              ? 'bg-emerald-600 text-white self-end rounded-tr-none'
-                              : 'bg-white border border-neutral-200 text-neutral-900 self-start rounded-tl-none'
-                          }`}
-                        >
-                          {m.text && <p>{m.text}</p>}
-                          {m.attachment && (
-                            <img src={m.attachment} className="mt-2 rounded-lg max-h-32 object-cover" referrerPolicy="no-referrer" />
-                          )}
-                          <span className={`text-[10px] block mt-1 ${m.sender_id === user.id ? 'text-emerald-100' : 'text-neutral-400'}`}>
-                            {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <form onSubmit={handleSendUserMessage} className="space-y-2">
-                      {attachment && (
-                        <div className="relative inline-block">
-                          <img src={attachment} className="w-16 h-16 rounded-lg object-cover" />
-                          <button onClick={() => setAttachment(null)} className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full"><X size={10} /></button>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <label className="p-3 bg-neutral-100 text-neutral-500 rounded-xl hover:bg-neutral-200 cursor-pointer transition-colors">
-                          <Paperclip size={20} />
-                          <input type="file" className="hidden" onChange={handleFileChange} accept="image/*" />
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="Type a message..."
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-                        />
-                        <button type="submit" className="p-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors">
-                          <Send size={20} />
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Product Detail Modal - Full Window */}
+      {/* Product Detail Modal (Native Sheet Style) */}
       <AnimatePresence>
         {selectedItem && (
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[60] bg-white flex flex-col"
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed inset-0 z-[60] bg-white flex flex-col md:inset-x-auto md:right-0 md:w-[500px] md:shadow-2xl"
           >
+            {/* Native Sheet Handle (Mobile Only) */}
+            <div className="md:hidden flex justify-center pt-3 pb-1">
+              <div className="w-12 h-1.5 bg-neutral-200 rounded-full" />
+            </div>
+
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-bottom border-neutral-100 px-6 py-4 flex items-center justify-between">
+            <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-xl border-b border-neutral-100 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedItem(null)}
@@ -1497,17 +971,22 @@ export default function Home({ user }: { user: User | null }) {
                 >
                   <X size={24} />
                 </button>
-                <h2 className="text-lg font-black text-neutral-900 truncate max-w-[200px] md:max-w-md">
+                <h2 className="text-lg font-bold text-neutral-900 truncate max-w-[200px]">
                   {selectedItem.title}
                 </h2>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleLike(selectedItem.id)}
-                  className="flex items-center gap-2 px-4 py-2 bg-neutral-100 hover:bg-neutral-200 rounded-full transition-colors"
+                  className="p-2.5 bg-neutral-100 hover:bg-red-50 text-neutral-600 hover:text-red-500 rounded-2xl transition-all active:scale-90"
                 >
-                  <Heart size={18} className={selectedItem.likes ? "fill-red-500 text-red-500" : "text-neutral-600"} />
-                  <span className="text-sm font-bold">{selectedItem.likes || 0}</span>
+                  <Heart size={20} className={selectedItem.likes ? "fill-current" : ""} />
+                </button>
+                <button
+                  onClick={() => handleShare(selectedItem)}
+                  className="p-2.5 bg-neutral-100 hover:bg-emerald-50 text-neutral-600 hover:text-emerald-500 rounded-2xl transition-all active:scale-90"
+                >
+                  <Share2 size={20} />
                 </button>
               </div>
             </div>
@@ -1558,25 +1037,15 @@ export default function Home({ user }: { user: User | null }) {
                         <div className="h-px flex-1 bg-neutral-100"></div>
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {(() => {
-                          try {
-                            const gallery = JSON.parse(selectedItem.gallery);
-                            if (Array.isArray(gallery)) {
-                              return gallery.map((img: string, i: number) => (
-                                <motion.div
-                                  key={i}
-                                  whileHover={{ scale: 1.02 }}
-                                  className="aspect-square rounded-[2rem] overflow-hidden border border-neutral-100 shadow-sm"
-                                >
-                                  <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                                </motion.div>
-                              ));
-                            }
-                          } catch (e) {
-                            console.error('Error parsing gallery:', e);
-                          }
-                          return null;
-                        })()}
+                        {JSON.parse(selectedItem.gallery).map((img: string, i: number) => (
+                          <motion.div 
+                            key={i} 
+                            whileHover={{ scale: 1.02 }}
+                            className="aspect-square rounded-[2rem] overflow-hidden border border-neutral-100 shadow-sm"
+                          >
+                            <img src={img} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </motion.div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1590,22 +1059,12 @@ export default function Home({ user }: { user: User | null }) {
                         <div className="h-px flex-1 bg-neutral-100"></div>
                       </h4>
                       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        {(() => {
-                          try {
-                            const fields = JSON.parse(selectedItem.custom_fields);
-                            if (typeof fields === 'object' && fields !== null) {
-                              return Object.entries(fields).map(([key, value]) => (
-                                <div key={key} className="p-6 bg-neutral-50 rounded-[2rem] border border-neutral-100">
-                                  <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">{key}</p>
-                                  <p className="text-lg font-black text-neutral-900">{(value as string)}</p>
-                                </div>
-                              ));
-                            }
-                          } catch (e) {
-                            console.error('Error parsing custom fields:', e);
-                          }
-                          return null;
-                        })()}
+                        {Object.entries(JSON.parse(selectedItem.custom_fields)).map(([key, value]) => (
+                          <div key={key} className="p-6 bg-neutral-50 rounded-[2rem] border border-neutral-100">
+                            <p className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest mb-1">{key}</p>
+                            <p className="text-lg font-black text-neutral-900">{(value as string)}</p>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1645,17 +1104,6 @@ export default function Home({ user }: { user: User | null }) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Review Modal */}
-      <ReviewModal
-        item={reviewItem}
-        user={user}
-        isOpen={isReviewModalOpen}
-        onClose={() => { setIsReviewModalOpen(false); setReviewItem(null); }}
-        addToCart={addToCart}
-        onNegotiate={handleNegotiate}
-      />
     </div>
-    </>
   );
 }

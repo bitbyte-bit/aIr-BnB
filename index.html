@@ -6,31 +6,11 @@
     <title>Vitu - Business Showcase</title>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#10b981" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png" />
-    <link rel="icon" type="image/png" sizes="16x16" href="/icon-16.png" />
-    
-    <!-- Default Open Graph Meta Tags -->
-    <meta property="og:title" content="Vitu - Business Showcase" />
-    <meta property="og:description" content="Discover amazing businesses and products on Vitu" />
-    <meta property="og:image" content="/assets/logo.png" />
-    <meta property="og:url" content="https://zionnent.com/vitu" />
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Vitu" />
-    <meta property="og:locale" content="en_US" />
-    
-    <!-- Twitter Card Meta Tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Vitu - Business Showcase" />
-    <meta name="twitter:description" content="Discover amazing businesses and products on Vitu" />
-    <meta name="twitter:image" content="/assets/logo.png" />
-    
+    <link rel="apple-touch-icon" href="https://picsum.photos/seed/vitu-icon/192/192" />
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.error('[SW] Registration failed:', err);
-          });
+          navigator.serviceWorker.register('/sw.js');
         });
       }
     </script>

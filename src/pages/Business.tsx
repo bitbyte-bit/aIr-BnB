@@ -1,16 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck, Share2, Power, ShoppingCart } from 'lucide-react';
+import { Briefcase, Plus, TrendingUp, Package, Heart, Save, Camera, MapPin, Phone, Globe, Edit3, Trash2, Users, AlertCircle, CheckCircle, Inbox, MessageSquare, ShieldCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Business, Message, SocialHandle } from '../types';
-import ProfileCodes from '../components/ProfileCodes';
-import BillingModal from '../components/BillingModal';
-import EditItemModal from '../components/EditItemModal';
-import { useToast } from '../components/Toast';
 
 export default function BusinessPage({ user, business, onUpdate }: { user: User; business: Business | null; onUpdate: () => void }) {
   const [name, setName] = useState(business?.name || '');
-  const { showToast } = useToast();
   const [description, setDescription] = useState(business?.description || '');
   const [logo, setLogo] = useState(business?.logo || '');
   const [address, setAddress] = useState(business?.address || '');
@@ -32,24 +27,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [businessItems, setBusinessItems] = useState<any[]>([]);
   const [requestingApproval, setRequestingApproval] = useState(false);
-  const [newItem, setNewItem] = useState({
-    title: '',
-    description: '',
+  const [newItem, setNewItem] = useState({ 
+    title: '', 
+    description: '', 
     image_url: '',
     gallery: [] as string[],
-    customFields: [] as { key: string; value: string }[],
-    type: 'product' as 'product' | 'service',
-    price: '',
-    discount: ''
+    customFields: [] as { key: string; value: string }[]
   });
   
   const logoInputRef = useRef<HTMLInputElement>(null);
   const itemImageInputRef = useRef<HTMLInputElement>(null);
-  const [showProfileCodes, setShowProfileCodes] = useState(false);
-  const [showBillingModal, setShowBillingModal] = useState(false);
-  const [billingStats, setBillingStats] = useState({ itemCount: 0, totalLikes: 0, needsBilling: false });
-  const [editingItem, setEditingItem] = useState<any | null>(null);
-  const [cart, setCart] = useState<any[]>([]);
 
   useEffect(() => {
     fetchBusinessTypes();
@@ -58,7 +45,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
   useEffect(() => {
     if (business) {
       fetchAnalytics();
-      checkBillingStatus();
       setName(business.name);
       setDescription(business.description);
       setLogo(business.logo || '');
@@ -76,42 +62,65 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     }
   }, [business, activeTab]);
 
-  const fetchWithRetry = async (url: string, options: RequestInit = {}, retries = 3, onSuccess: (data: any) => void, onError?: (err: any) => void) => {
+  const fetchBusinessTypes = async () => {
     try {
-      const res = await fetch(url, options);
+      const res = await fetch('/api/business-types');
       if (res.ok) {
         const data = await res.json();
-        onSuccess(data);
-      } else {
-        throw new Error(`Request failed: ${res.status}`);
+        setAvailableTypes(data);
       }
     } catch (err) {
-      if (retries > 0) {
-        setTimeout(() => fetchWithRetry(url, options, retries - 1, onSuccess, onError), 1000);
-      } else {
-        console.error(`Failed to fetch from ${url}:`, err);
-        if (onError) onError(err);
-      }
+      console.error("Failed to fetch business types:", err);
     }
-  };
-
-  const fetchBusinessTypes = async () => {
-    fetchWithRetry('/api/business-types', {}, 0, (data) => setAvailableTypes(data));
   };
 
   const fetchBusinessItems = async (retries = 3) => {
     if (!business) return;
-    fetchWithRetry(`/api/businesses/${business.id}/items`, {}, retries, (data) => setBusinessItems(Array.isArray(data) ? data : []), () => setBusinessItems([]));
+    try {
+      const res = await fetch(`/api/businesses/${business.id}/items`);
+      if (res.ok) {
+        const data = await res.json();
+        setBusinessItems(data);
+      }
+    } catch (err) {
+      if (retries > 0) {
+        setTimeout(() => fetchBusinessItems(retries - 1), 1000);
+      } else {
+        console.error("Failed to fetch business items:", err);
+      }
+    }
   };
 
   const fetchMessages = async (retries = 3) => {
     if (!business) return;
-    fetchWithRetry(`/api/messages/business/${business.id}`, {}, retries, (data) => setMessages(data));
+    try {
+      const res = await fetch(`/api/messages/business/${business.id}`);
+      if (!res.ok) throw new Error('Failed to fetch messages');
+      const data = await res.json();
+      setMessages(data);
+    } catch (err) {
+      if (retries > 0) {
+        setTimeout(() => fetchMessages(retries - 1), 1000);
+      } else {
+        console.error("Failed to fetch messages:", err);
+      }
+    }
   };
 
   const fetchAnalytics = async (retries = 3) => {
     if (!business) return;
-    fetchWithRetry(`/api/businesses/${business.id}/analytics`, {}, retries, (data) => setAnalytics(data));
+    try {
+      const res = await fetch(`/api/businesses/${business.id}/analytics`);
+      if (!res.ok) throw new Error('Failed to fetch analytics');
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (err) {
+      if (retries > 0) {
+        setTimeout(() => fetchAnalytics(retries - 1), 1000);
+      } else {
+        console.error("Failed to fetch analytics:", err);
+      }
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string) => void) => {
@@ -120,22 +129,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const reader = new FileReader();
       reader.onloadend = () => setter(reader.result as string);
       reader.readAsDataURL(file);
-    }
-  };
-
-  const addToCart = (item: any) => {
-    if (item.type === 'product') {
-      setCart(prev => {
-        if (prev.find(cartItem => cartItem.id === item.id)) {
-          showToast('Product already in cart', 'info');
-          return prev;
-        } else {
-          showToast('Product added to cart', 'success');
-          return [...prev, item];
-        }
-      });
-    } else {
-      showToast('Only products can be added to cart', 'info');
     }
   };
 
@@ -148,7 +141,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user?.id,
+          sender_id: user.id,
           receiver_id: replyingTo.sender_id,
           text: replyText,
         }),
@@ -157,7 +150,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       if (res.ok) {
         setReplyText('');
         setReplyingTo(null);
-        showToast('Reply sent!', 'success');
+        alert('Reply sent!');
       }
     } catch (err) {
       console.error('Failed to send reply:', err);
@@ -174,10 +167,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const res = await fetch(endpoint, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ownerId: user?.id,
-          name,
-          description,
+        body: JSON.stringify({ 
+          ownerId: user.id, 
+          name, 
+          description, 
           logo,
           address,
           contacts,
@@ -189,10 +182,10 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       if (res.ok) {
         onUpdate();
         setIsEditingProfile(false);
-        if (business) showToast('Business profile updated!', 'success');
+        if (business) alert('Business profile updated!');
       } else {
         const data = await res.json();
-        showToast(data.error || 'Failed to update business', 'error');
+        alert(data.error);
       }
     } catch (err) {
       console.error(err);
@@ -216,16 +209,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sender_id: user?.id,
+          sender_id: user.id,
           receiver_id: adminId,
           text: `Hello Admin, I would like to request approval for my business: ${business.name}. Please review my profile.`,
         }),
       });
 
-      showToast('Approval request sent to the master admin!', 'success');
+      alert('Approval request sent to the master admin!');
     } catch (err) {
       console.error(err);
-      showToast('Failed to send request. Please try again later.', 'error');
+      alert('Failed to send request. Please try again later.');
     } finally {
       setRequestingApproval(false);
     }
@@ -235,7 +228,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
     e.preventDefault();
     if (!business) return;
     if (!newItem.image_url) {
-      showToast('Please upload an image for the item', 'error');
+      alert('Please upload an image for the item');
       return;
     }
     setLoading(true);
@@ -243,17 +236,16 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       const res = await fetch('/api/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newItem,
+        body: JSON.stringify({ 
+          ...newItem, 
           business_id: business.id,
           gallery: JSON.stringify(newItem.gallery),
-          custom_fields: JSON.stringify(newItem.customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {})),
-          discount: newItem.discount || null
+          custom_fields: JSON.stringify(newItem.customFields.reduce((acc, curr) => ({ ...acc, [curr.key]: curr.value }), {}))
         }),
       });
       if (res.ok) {
-        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [], type: 'product', price: '', discount: '' });
-        showToast('Item posted successfully!', 'success');
+        setNewItem({ title: '', description: '', image_url: '', gallery: [], customFields: [] });
+        alert('Item posted successfully!');
         fetchAnalytics();
         fetchBusinessItems();
       }
@@ -302,43 +294,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
       }
     } catch (err) {
       console.error(err);
-    }
-  };
-
-  const handleToggleItemStatus = async (itemId: string, currentStatus: boolean) => {
-    try {
-      const res = await fetch(`/api/items/${itemId}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ is_active: !currentStatus })
-      });
-      if (res.ok) {
-        const updatedItem = await res.json();
-        if (updatedItem && updatedItem.id) {
-          setBusinessItems(prev => {
-            if (!Array.isArray(prev)) return [];
-            return prev.map(item => item.id === itemId ? updatedItem : item);
-          });
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const checkBillingStatus = async () => {
-    if (!business) return;
-    try {
-      const res = await fetch(`/api/businesses/${business.id}/billing-status`);
-      if (res.ok) {
-        const data = await res.json();
-        setBillingStats(data);
-        if (data.needsBilling) {
-          setShowBillingModal(true);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to check billing status:', err);
     }
   };
 
@@ -590,12 +545,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
         >
           <Edit3 size={20} />
         </button>
-        <button 
-          onClick={() => setShowProfileCodes(true)}
-          className="p-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors"
-        >
-          <Share2 size={20} />
-        </button>
       </header>
 
       {/* Approval Status Banner */}
@@ -676,7 +625,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                           return handles.map((h: any, i: number) => (
                             <a
                               key={i}
-                              href={h.url?.startsWith('http') ? h.url : `https://${h.url}`}
+                              href={h.url.startsWith('http') ? h.url : `https://${h.url}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
@@ -685,9 +634,7 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                             </a>
                           ));
                         }
-                      } catch (e) {
-                        console.error('Error parsing social handles:', e);
-                      }
+                      } catch (e) {}
                       return <p className="text-sm font-medium text-neutral-700">Not provided</p>;
                     })()}
                   </div>
@@ -923,45 +870,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Type</label>
-                <select
-                  disabled={!business.is_approved}
-                  value={newItem.type}
-                  onChange={(e) => setNewItem({ ...newItem, type: e.target.value as 'product' | 'service' })}
-                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
-                >
-                  <option value="product">Product</option>
-                  <option value="service">Service</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Price (UGX)</label>
-                <input
-                  type="number"
-                  disabled={!business.is_approved}
-                  value={newItem.price}
-                  onChange={(e) => setNewItem({ ...newItem, price: e.target.value })}
-                  placeholder="0"
-                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Discount (%)</label>
-                <input
-                  type="number"
-                  disabled={!business.is_approved}
-                  value={newItem.discount}
-                  onChange={(e) => setNewItem({ ...newItem, discount: e.target.value })}
-                  placeholder="0"
-                  min="0"
-                  max="100"
-                  className="w-full px-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none transition-all disabled:cursor-not-allowed"
-                />
-              </div>
-
               {/* Gallery Upload */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-bold text-neutral-400 uppercase tracking-widest ml-1">Product Gallery</label>
@@ -1063,71 +971,29 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
                 <p className="text-neutral-500">You haven't posted any items yet.</p>
               </div>
             ) : (
-              <div className="grid gap-6 grid-cols-2">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {businessItems.map(item => (
                   <div key={item.id} className="bg-white rounded-3xl border border-neutral-200 overflow-hidden shadow-sm group">
                     <div className="aspect-square overflow-hidden relative">
-                      <img src={item.image_url} alt={item.title} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
-                      <div className="absolute top-4 right-4 flex gap-2">
-                        <button 
-                          onClick={() => handleToggleItemStatus(item.id, item.is_active !== false)}
-                          className={`p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-sm transition-colors ${item.is_active !== false ? 'text-emerald-600 hover:bg-emerald-600 hover:text-white' : 'text-neutral-500 hover:bg-neutral-600 hover:text-white'}`}
-                          title={item.is_active !== false ? 'Deactivate' : 'Activate'}
-                        >
-                          <Power size={18} />
-                        </button>
-                        <button 
-                          onClick={() => setEditingItem(item)}
-                          className="p-2 bg-white/90 backdrop-blur-sm text-neutral-700 rounded-xl shadow-sm hover:bg-emerald-600 hover:text-white transition-colors"
-                        >
-                          <Edit3 size={18} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteItem(item.id)}
-                          className="p-2 bg-white/90 backdrop-blur-sm text-red-500 rounded-xl shadow-sm hover:bg-red-600 hover:text-white transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                      <img src={item.image_url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <button 
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="absolute top-4 right-4 p-2 bg-white/90 backdrop-blur-sm text-red-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
-                     <div className="p-4">
-                       <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
-                        <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
+                    <div className="p-4">
+                      <h4 className="font-bold text-neutral-900 mb-1">{item.title}</h4>
+                      <p className="text-xs text-neutral-500 line-clamp-2">{item.description}</p>
                       <div className="mt-4 flex items-center justify-between">
-                        {item.type === 'product' ? (
-                          <>
-                            <span className="text-lg font-bold text-emerald-600">UGX {item.price}</span>
-                            <button
-                              onClick={() => addToCart(item)}
-                              className="p-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                              title="Add to Cart"
-                            >
-                              <ShoppingCart size={16} />
-                            </button>
-                          </>
-                        ) : item.type === 'service' ? (
-                          <>
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-                              {new Date(item.created_at).toLocaleDateString()}
-                            </span>
-                            <button
-                              className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
-                              title="Negotiate"
-                            >
-                              <MessageSquare size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
-                              {new Date(item.created_at).toLocaleDateString()}
-                            </span>
-                            <div className={`flex items-center gap-1 ${item.is_active !== false ? 'text-emerald-600' : 'text-red-500'}`}>
-                              {item.is_active !== false ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
-                              <span className="text-[10px] font-bold uppercase">{item.is_active !== false ? 'Live' : 'Inactive'}</span>
-                            </div>
-                          </>
-                        )}
+                        <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </span>
+                        <div className="flex items-center gap-1 text-emerald-600">
+                          <CheckCircle size={14} />
+                          <span className="text-[10px] font-bold uppercase">Live</span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1137,39 +1003,6 @@ export default function BusinessPage({ user, business, onUpdate }: { user: User;
           </div>
         </div>
       )}
-
-      {/* Profile Codes Modal */}
-      {business && (
-        <ProfileCodes
-          isOpen={showProfileCodes}
-          onClose={() => setShowProfileCodes(false)}
-          profileType="business"
-          profileId={business.id}
-          profileName={business.name}
-        />
-      )}
-
-      {/* Billing Modal */}
-      {business && (
-        <BillingModal
-          isOpen={showBillingModal}
-          onClose={() => setShowBillingModal(false)}
-          businessId={business.id}
-          businessName={business.name}
-          itemCount={billingStats.itemCount}
-          totalLikes={billingStats.totalLikes}
-        />
-      )}
-
-      {/* Edit Item Modal */}
-      <EditItemModal
-        isOpen={!!editingItem}
-        onClose={() => setEditingItem(null)}
-        item={editingItem}
-        onSave={(updatedItem) => {
-          setBusinessItems(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
-        }}
-      />
     </div>
   );
 }

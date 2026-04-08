@@ -1,36 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check, Bell, MessageSquare, Search, FileText, LogIn } from 'lucide-react';
+import { Home, User, Settings, LayoutDashboard, LogOut, Menu, X, Heart, PlusCircle, BarChart3, Briefcase, Download, Share, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 import HomePage from './pages/Home';
 import AuthPage from './pages/Auth';
-import VerifyEmailPage from './pages/VerifyEmail';
-import ResetPasswordPage from './pages/ResetPassword';
 import ProfilePage from './pages/Profile';
 import AdminPage from './pages/Admin';
 import BusinessPage from './pages/Business';
-import InboxPage from './pages/Inbox';
-import PrivacyPage from './pages/Privacy';
-import TermsPage from './pages/Terms';
-import { ToastProvider } from './components/Toast';
-import { CurrencyProvider, useCurrency, CurrencyOption } from './context/CurrencyContext';
 import { User as UserType, Business } from './types';
 import socket from './socket';
-import { playNotificationAlert, playSystemAlert } from './utils/notificationSound';
-import Banner, { BannerData } from './components/Banner';
-
-// VAPID public key - should match server.js
-const VAPID_PUBLIC_KEY = 'BJ3bPi4mRiJb9Ny8aYRP-5AhLrT-Smmmc-Y2vYw-iIyv6EVKsWlBFnQLrGQqmJXhGbhcnNumcWdjjG6Bni1CRco';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-function AppContent() {
-  const navigate = useNavigate();
+export default function App() {
   const [user, setUser] = useState<UserType | null>(() => {
     try {
       const saved = localStorage.getItem('user');
@@ -44,65 +31,10 @@ function AppContent() {
   const [business, setBusiness] = useState<Business | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [unreadCount, setUnreadCount] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem('unread_notifications');
-      const parsed = saved ? parseInt(saved, 10) : 0;
-      return isNaN(parsed) || parsed < 0 ? 0 : parsed;
-    } catch {
-      return 0;
-    }
-  });
-  const [banners, setBanners] = useState<BannerData[]>([]);
-  const [currentBanner, setCurrentBanner] = useState<BannerData | null>(null);
-  const [dismissedBanners, setDismissedBanners] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('dismissed_banners');
-      const parsed = saved ? JSON.parse(saved) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      console.error('Error parsing dismissed banners from localStorage:', error);
-      return [];
-    }
-  });
-
-  // Load unread count from localStorage on mount
-  useEffect(() => {
-    const savedCount = localStorage.getItem('unread_notifications');
-    if (savedCount) {
-      const count = parseInt(savedCount, 10);
-      if (!isNaN(count)) {
-        setUnreadCount(count);
-      }
-    }
-  }, []);
-
-  // Update badge when unread count changes
-  useEffect(() => {
-    // Skip if unreadCount is not a valid number
-    if (typeof unreadCount !== 'number' || unreadCount < 0) {
-      return;
-    }
-    
-    if ('setAppBadge' in navigator) {
-      if (unreadCount > 0) {
-        navigator.setAppBadge(unreadCount).catch(console.error);
-      } else {
-        navigator.clearAppBadge().catch(console.error);
-      }
-    }
-    localStorage.setItem('unread_notifications', unreadCount.toString());
-  }, [unreadCount]);
 
   useEffect(() => {
-    // Check if already installed
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
     const isDismissed = sessionStorage.getItem('pwa_banner_dismissed');
-
-    // Show banner if not standalone and not dismissed
-    if (!isStandalone && !isDismissed) {
-      setShowInstallBanner(true);
-    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -135,6 +67,7 @@ function AppContent() {
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
       // If no deferredPrompt (e.g. iOS), we could show instructions
+      alert('To install: tap the share button and "Add to Home Screen"');
       return;
     }
     deferredPrompt.prompt();
@@ -146,111 +79,12 @@ function AppContent() {
     setShowInstallBanner(false);
   };
 
-  const fetchBanners = async () => {
-    try {
-      const res = await fetch('/api/banners/active');
-      if (res.ok) {
-        const data = await res.json();
-        // Validate that data is an array
-        if (Array.isArray(data)) {
-          setBanners(data);
-        } else {
-          console.error('Invalid banner data received:', data);
-          setBanners([]);
-        }
-      } else {
-        console.error('Failed to fetch banners:', res.status);
-      }
-    } catch (err) {
-      console.error('Error fetching banners:', err);
-      setBanners([]);
-    }
-  };
-
-  const showBanner = (banner: BannerData) => {
-    if (banner && banner.id && !dismissedBanners.includes(banner.id)) {
-      setCurrentBanner(banner);
-    }
-  };
-
-  const dismissBanner = () => {
-    if (currentBanner) {
-      const newDismissed = [...dismissedBanners, currentBanner.id];
-      setDismissedBanners(newDismissed);
-      localStorage.setItem('dismissed_banners', JSON.stringify(newDismissed));
-      setCurrentBanner(null);
-    }
-  };
-
-  const handleBannerInstallUpdate = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      }
-      setDeferredPrompt(null);
-      dismissBanner();
-    }
-  };
-
-  const handleBannerChat = () => {
-    // Open WhatsApp chat
-    const whatsappUrl = 'https://wa.me/1234567890'; // Replace with actual WhatsApp number
-    window.open(whatsappUrl, '_blank');
-    dismissBanner();
-  };
-
   useEffect(() => {
-    if (user && user.id) {
-      // Join user's notification room
-      socket.emit('join', user.id);
-      // Register for push notifications after login
-      registerPushNotifications(user.id);
-      // Fetch user's business data
+    if (user) {
       fetchBusiness();
-      // Navigate to home after login
-      navigate('/');
+      setupNotifications();
     }
   }, [user]);
-
-  // Fetch banners on app load
-  useEffect(() => {
-    fetchBanners();
-  }, []);
-
-  // Show welcome banner for new users
-  useEffect(() => {
-    if (user && banners.length > 0 && user.created_at) {
-      try {
-        // Check if user is new (created within last 24 hours)
-        const userCreatedAt = new Date(user.created_at);
-        const now = new Date();
-        const hoursSinceCreation = (now.getTime() - userCreatedAt.getTime()) / (1000 * 60 * 60);
-
-        if (hoursSinceCreation < 24) {
-          const welcomeBanner = banners.find(b => b.type === 'welcome');
-          if (welcomeBanner) {
-            // Delay showing welcome banner to let user settle in
-            setTimeout(() => showBanner(welcomeBanner), 3000);
-          }
-        }
-      } catch (error) {
-        console.error('Error checking user creation date:', error);
-      }
-    }
-  }, [user, banners]);
-
-  // Show update banner when new features are available
-  useEffect(() => {
-    if (banners.length > 0 && !user) {
-      // Show update banner to non-logged-in users (or could be to all users)
-      const updateBanner = banners.find(b => b.type === 'update');
-      if (updateBanner) {
-        setTimeout(() => showBanner(updateBanner), 5000);
-      }
-    }
-  }, [banners, user]);
 
   const fetchBusiness = async (retries = 3) => {
     if (!user) return;
@@ -276,25 +110,9 @@ function AppContent() {
     }
 
     socket.on('notification', (data) => {
-      // Validate notification data before using
-      const title = data?.title || 'Vitu Notification';
-      const body = data?.body || data?.text || 'You have a new notification';
-      const type = data?.type || 'default';
-
-      // Play appropriate alert based on notification type
-      if (type === 'new_item') {
-        playNotificationAlert(); // sound + vibration
-      } else if (type === 'follow' || type === 'system' || type === 'success' || type === 'error') {
-        playSystemAlert(); // only vibration
-      } else {
-        playNotificationAlert(); // default: sound + vibration
-      }
-
       if (Notification.permission === "granted") {
-        new Notification(title, { body });
+        new Notification(data.title, { body: data.body });
       }
-      // Increment unread count and update badge
-      setUnreadCount(prev => prev + 1);
     });
 
     return () => {
@@ -302,90 +120,20 @@ function AppContent() {
     };
   };
 
-  // Register Service Worker and subscribe to push notifications
-  const registerPushNotifications = async (userId: number) => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      console.log('Push notifications not supported');
-      return;
-    }
-
-    try {
-      // Register service worker
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registered:', registration);
-
-      // Check current permission
-      let permission = Notification.permission;
-      
-      if (permission === 'default') {
-        permission = await Notification.requestPermission();
-      }
-
-      if (permission === 'granted') {
-        // Subscribe to push notifications
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
-        });
-
-        // Save subscription to server
-        await fetch('/api/push/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, subscription })
-        });
-
-        console.log('Push subscription successful');
-      }
-    } catch (err) {
-      console.error('Failed to register push notifications:', err);
-    }
-  };
-
-  // Utility function to convert VAPID key
-  function urlBase64ToUint8Array(base64String: string) {
-    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    return outputArray;
-  }
-
   const handleLogin = (userData: UserType) => {
     setUser(userData);
     localStorage.setItem('user', JSON.stringify(userData));
-    // Join user to their notification room
-    socket.emit('join', userData.id);
-    // Register for push notifications after login
-    registerPushNotifications(userData.id);
-    // Navigate to home after login
-    navigate('/');
   };
 
   const handleLogout = () => {
-    // Leave notification room and clean up socket connections
-    if (user?.id) {
-      socket.emit('leave', user.id);
-    }
     setUser(null);
     setBusiness(null);
     localStorage.removeItem('user');
-    // Reset unread count badge
-    setUnreadCount(0);
-    if ('clearAppBadge' in navigator) {
-      navigator.clearAppBadge().catch(console.error);
-    }
-    // Navigate to auth page after logout
-    navigate('/auth');
   };
 
   return (
-    <CurrencyProvider>
-        <ToastProvider>
-          <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
+    <Router>
+      <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
         <AnimatePresence>
           {showInstallBanner && (
             <motion.div
@@ -459,165 +207,83 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <Layout
-          user={user}
-          business={business}
-          onLogout={handleLogout}
-          onLogin={handleLogin}
-          unreadCount={unreadCount}
-          setUnreadCount={setUnreadCount}
-          currentBanner={currentBanner}
-          dismissBanner={dismissBanner}
-          onBannerInstallUpdate={handleBannerInstallUpdate}
-          onBannerChat={handleBannerChat}
-        >
+        <AnimatePresence mode="wait">
           <Routes>
-            <Route path="/" element={<HomePage user={user} />} />
-            <Route path="/item/:itemId" element={<HomePage user={user} />} />
-            <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-            <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
-            <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
-            <Route path="/inbox" element={<InboxPage user={user} />} />
-            <Route path="/auth" element={<AuthPage onLogin={handleLogin} />} />
-            <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route path="/reset-password" element={<ResetPasswordPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            {user && user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {!user ? (
+              <Route path="*" element={<AuthPage onLogin={handleLogin} />} />
+            ) : (
+              <Route
+                path="*"
+                element={
+                  <Layout user={user} business={business} onLogout={handleLogout}>
+                    <Routes>
+                      <Route path="/" element={<HomePage user={user} />} />
+                      <Route path="/item/:itemId" element={<HomePage user={user} />} />
+                      <Route path="/profile" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+                      <Route path="/profile/:userId" element={<ProfilePage user={user} onUpdate={handleLogin} />} />
+                      <Route path="/business" element={<BusinessPage user={user} business={business} onUpdate={fetchBusiness} />} />
+                      {user.role === 'admin' && <Route path="/admin" element={<AdminPage />} />}
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Routes>
+                  </Layout>
+                }
+              />
+            )}
           </Routes>
-        </Layout>
+        </AnimatePresence>
       </div>
-      </ToastProvider>
-    </CurrencyProvider>
-  );
-}
-
-export default function App() {
-  return (
-    <Router>
-      <AppContent />
     </Router>
   );
 }
 
-function Layout({ children, user, business, onLogout, onLogin, unreadCount, setUnreadCount, currentBanner, dismissBanner, onBannerInstallUpdate, onBannerChat }: {
-  children: React.ReactNode;
-  user: UserType | null;
-  business: Business | null;
-  onLogout: () => void;
-  onLogin: (userData: UserType) => void;
-  unreadCount: number;
-  setUnreadCount: (count: number) => void;
-  currentBanner: BannerData | null;
-  dismissBanner: () => void;
-  onBannerInstallUpdate: () => void;
-  onBannerChat: () => void;
-}) {
+function Layout({ children, user, business, onLogout }: { children: React.ReactNode; user: UserType; business: Business | null; onLogout: () => void }) {
   const [isSideMenuOpen, setIsSideMenuOpen] = useState(false);
   const location = useLocation();
-  const { currency, setCurrency } = useCurrency();
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   const navItems = [
     { label: 'Home', icon: Home, path: '/' },
-    ...(user ? [
-      { label: 'Profile', icon: User, path: '/profile' },
-      { label: 'Inbox', icon: MessageSquare, path: '/inbox' },
-      { label: business ? 'My Business' : 'Register Business', icon: Briefcase, path: '/business' },
-      ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
-    ] : []),
+    { label: 'Business', icon: Briefcase, path: '/business' },
+    { label: 'Profile', icon: User, path: '/profile' },
+    ...(user.role === 'admin' ? [{ label: 'Admin', icon: LayoutDashboard, path: '/admin' }] : []),
   ];
 
-  // Touch handlers for swipe to open drawer
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
-    const distance = touchEnd - touchStart;
-    const isLeftSwipe = distance < -50;
-    const isRightSwipe = distance > 50;
-
-    if (isRightSwipe && !isSideMenuOpen) {
-      setIsSideMenuOpen(true);
-    } else if (isLeftSwipe && isSideMenuOpen) {
-      setIsSideMenuOpen(false);
-    }
-  };
+  const isHome = location.pathname === '/' || location.pathname.startsWith('/item/');
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Banner */}
-      {currentBanner && currentBanner.id && (
-        <Banner
-          banner={currentBanner}
-          onClose={dismissBanner}
-          onInstallUpdate={currentBanner.type === 'update' ? onBannerInstallUpdate : undefined}
-          onChat={currentBanner.type === 'welcome' ? onBannerChat : undefined}
-        />
-      )}
-
-      {/* Top Navigation Bar - Always Visible */}
-      <header className="sticky top-0 z-50 flex items-center justify-between h-14 px-4 bg-white/95 backdrop-blur-md border-b border-neutral-200 shadow-sm">
+    <div className="flex flex-col h-screen overflow-hidden bg-neutral-50">
+      {/* Top Bar (Native Style) */}
+      <header className="sticky top-0 z-40 flex items-center justify-between h-14 px-4 bg-white/80 backdrop-blur-xl border-b border-neutral-100 safe-top">
         <div className="flex items-center gap-3">
-          <button onClick={() => setIsSideMenuOpen(true)} className="p-2 -ml-2 text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors">
-            <Menu size={22} />
-          </button>
-          <Link to="/" className="text-xl font-bold tracking-tight text-emerald-600">
-            Vitu
-          </Link>
+          {!isHome ? (
+            <button 
+              onClick={() => navigate(-1)} 
+              className="p-2 -ml-2 text-neutral-600 active:scale-90 transition-transform"
+            >
+              <X size={20} className="rotate-45" /> {/* Back-like icon */}
+            </button>
+          ) : (
+            <button onClick={() => setIsSideMenuOpen(true)} className="p-2 -ml-2 text-neutral-600 md:hidden active:scale-90 transition-transform">
+              <Menu size={22} />
+            </button>
+          )}
+          <span className="text-lg font-bold tracking-tight text-emerald-600">Vitu</span>
         </div>
         
-        {/* Search Button */}
-        <Link 
-          to="/" 
-          className="flex items-center gap-2 px-3 py-1.5 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors"
-        >
-          <Search size={18} />
-          <span className="text-sm hidden sm:inline">Search</span>
-        </Link>
-        
-        <div className="flex items-center gap-1">
-          {user && unreadCount > 0 && (
-            <Link to="/" onClick={() => setUnreadCount(0)} className="relative p-2 text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
-              <Bell size={22} />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            </Link>
-          )}
-          {user && (
-            <Link to="/profile" className="w-9 h-9 rounded-full bg-neutral-200 overflow-hidden border border-neutral-300 hover:border-emerald-500 transition-colors">
-              {user.profile_picture ? (
-                <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-sm">
-                  {user.name[0]}
-                </div>
-              )}
-            </Link>
-          )}
-          {!user && (
-            <Link
-              to="/auth"
-              className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
-            >
-              <LogIn size={18} />
-              <span className="hidden sm:inline">Login</span>
-            </Link>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-neutral-100 overflow-hidden border border-neutral-200">
+            {user.profile_picture ? (
+              <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-neutral-400 font-bold text-xs">
+                {user.name[0]}
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
-      {/* Side Menu (Slide-out Drawer) */}
+      {/* Side Menu (Desktop & Mobile Overlay) */}
       <AnimatePresence>
         {isSideMenuOpen && (
           <>
@@ -627,170 +293,154 @@ function Layout({ children, user, business, onLogout, onLogin, unreadCount, setU
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsSideMenuOpen(false)}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
+              className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm md:hidden"
             />
-            {/* Sidebar Drawer */}
+            {/* Sidebar */}
             <motion.aside
-              initial={{ x: -300 }}
+              initial={{ x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-neutral-200 flex flex-col shadow-2xl"
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 z-[60] w-72 bg-white flex flex-col shadow-2xl md:hidden"
             >
-              <div className="flex items-center justify-between h-14 px-6 border-b border-neutral-100">
+              <div className="flex items-center justify-between h-16 px-6 border-b border-neutral-100">
                 <span className="text-2xl font-bold tracking-tighter text-emerald-600">Vitu</span>
-                <button onClick={() => setIsSideMenuOpen(false)} className="p-2 -mr-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-full transition-colors">
+                <button onClick={() => setIsSideMenuOpen(false)} className="p-2 -mr-2 text-neutral-400">
                   <X size={20} />
                 </button>
               </div>
 
-              {/* User Info - Only show when logged in */}
-              {user && (
-                <div className="p-4 border-b border-neutral-100">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-neutral-200 overflow-hidden border-2 border-emerald-500">
-                      {user.profile_picture ? (
-                        <img src={user.profile_picture} alt={user.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-neutral-500 font-bold text-lg">
-                          {user.name[0]}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-neutral-900 truncate">{user.name}</p>
-                      <p className="text-sm text-neutral-500 truncate">{user.email}</p>
-                    </div>
-                  </div>
+              <div className="p-6 flex items-center gap-4 border-b border-neutral-50">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-xl">
+                  {user.name[0]}
                 </div>
-              )}
+                <div>
+                  <h4 className="font-bold text-neutral-900">{user.name}</h4>
+                  <p className="text-xs text-neutral-500">{user.email}</p>
+                </div>
+              </div>
 
-              <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+              <nav className="flex-1 px-4 py-6 space-y-1">
                 {navItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
                     onClick={() => setIsSideMenuOpen(false)}
                     className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+                      "flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-200 active:scale-95",
                       location.pathname === item.path
-                        ? "bg-emerald-50 text-emerald-600 font-medium"
-                        : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900"
+                        ? "bg-emerald-50 text-emerald-600 font-bold"
+                        : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
                     )}
                   >
                     <item.icon size={20} />
-                    {item.label}
+                    <span className="text-sm">{item.label}</span>
                   </Link>
                 ))}
               </nav>
 
-              <div className="p-4 border-t border-neutral-100 space-y-3">
-                <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-2xl">
-                  <label htmlFor="currency" className="block text-xs font-semibold text-neutral-500 uppercase mb-2">Currency</label>
-                  <select
-                    id="currency"
-                    value={currency}
-                    onChange={(e) => setCurrency(e.target.value as CurrencyOption)}
-                    className="w-full px-3 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="UGX">Uganda Shillings (UGX)</option>
-                    <option value="USD">United States Dollar (USD)</option>
-                    <option value="KES">Kenyan Shilling (KES)</option>
-                    <option value="TZS">Tanzanian Shilling (TZS)</option>
-                  </select>
-                </div>
-                {!user && (
-                  <Link
-                    to="/auth"
-                    onClick={() => setIsSideMenuOpen(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
-                  >
-                    <LogIn size={20} />
-                    Login / Sign Up
-                  </Link>
-                )}
-                <Link
-                  to="/privacy"
-                  onClick={() => setIsSideMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
+              <div className="p-6 border-t border-neutral-100 space-y-3">
+                <button
+                  onClick={onLogout}
+                  className="flex items-center gap-3 w-full px-4 py-3.5 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-colors active:scale-95"
                 >
-                  <Settings size={20} />
-                  Privacy Policy
-                </Link>
-                <Link
-                  to="/terms"
-                  onClick={() => setIsSideMenuOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-neutral-500 hover:text-neutral-900 hover:bg-neutral-50 rounded-xl transition-colors"
-                >
-                  <FileText size={20} />
-                  Terms of Service
-                </Link>
-                {user && (
-                  <button
-                    onClick={() => { setIsSideMenuOpen(false); onLogout(); }}
-                    className="flex items-center gap-3 w-full px-4 py-3 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                  >
-                    <LogOut size={20} />
-                    Sign Out
-                  </button>
-                )}
+                  <LogOut size={20} />
+                  <span className="text-sm font-medium">Sign Out</span>
+                </button>
               </div>
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main Content */}
-      <main
-        className="flex-1 max-w-4xl mx-auto w-full p-4 pb-20 md:pb-24"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
-        {children}
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-neutral-200 flex-col">
+        <div className="flex items-center h-16 px-6 border-b border-neutral-100">
+          <span className="text-2xl font-bold tracking-tighter text-emerald-600">Vitu</span>
+        </div>
+        <nav className="flex-1 px-4 py-6 space-y-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200",
+                location.pathname === item.path
+                  ? "bg-emerald-50 text-emerald-600 font-bold"
+                  : "text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900"
+              )}
+            >
+              <item.icon size={20} />
+              <span className="text-sm">{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="p-4 border-t border-neutral-100">
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-3 w-full px-4 py-3 text-neutral-500 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+          >
+            <LogOut size={20} />
+            <span className="text-sm font-medium">Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content (Native Scroll) */}
+      <main className="flex-1 overflow-y-auto overflow-x-hidden relative md:pl-0">
+        <div className="max-w-4xl mx-auto w-full min-h-full pb-24 md:pb-8 md:p-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="h-full"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </main>
 
-      {/* Bottom Navigation Bar - All Devices */}
-      <nav className="fixed bottom-0 inset-x-0 z-50 h-16 bg-white/95 backdrop-blur-lg border-t border-neutral-200 flex items-center justify-around shadow-lg">
-        {navItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full transition-all duration-200",
-              location.pathname === item.path 
-                ? "text-emerald-600 bg-emerald-50" 
-                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
-            )}
-          >
-            <div className={cn(
-              "p-1.5 rounded-xl transition-colors",
-              location.pathname === item.path ? "bg-emerald-100" : ""
-            )}>
-              <item.icon size={22} />
-            </div>
-            <span className="text-[10px] font-medium uppercase tracking-wider mt-0.5">{item.label}</span>
-          </Link>
-        ))}
-        {!user && (
-          <Link
-            to="/auth"
-            className={cn(
-              "flex flex-col items-center justify-center flex-1 h-full transition-all duration-200",
-              location.pathname === '/auth' 
-                ? "text-emerald-600 bg-emerald-50" 
-                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
-            )}
-          >
-            <div className={cn(
-              "p-1.5 rounded-xl transition-colors",
-              location.pathname === '/auth' ? "bg-emerald-100" : ""
-            )}>
-              <LogIn size={22} />
-            </div>
-            <span className="text-[10px] font-medium uppercase tracking-wider mt-0.5">Login</span>
-          </Link>
-        )}
+      {/* Bottom Navigation (Native Style) */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 h-[calc(4rem+env(safe-area-inset-bottom))] bg-white/90 backdrop-blur-xl border-t border-neutral-100 flex items-center justify-around px-4 pb-[env(safe-area-inset-bottom)] md:hidden">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
+            <Link
+              key={item.path}
+              to={item.path}
+              className={cn(
+                "relative flex flex-col items-center justify-center w-16 h-12 transition-all active:scale-90",
+                isActive ? "text-emerald-600" : "text-neutral-400"
+              )}
+            >
+              <item.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              <span className={cn(
+                "text-[9px] font-bold uppercase tracking-widest mt-1 transition-all",
+                isActive ? "opacity-100" : "opacity-60"
+              )}>
+                {item.label}
+              </span>
+              {isActive && (
+                <motion.div 
+                  layoutId="nav-indicator"
+                  className="absolute -top-3 w-1 h-1 bg-emerald-600 rounded-full"
+                />
+              )}
+            </Link>
+          );
+        })}
+        
+        {/* Floating Action Button (Native style) */}
+        <button 
+          onClick={() => navigate('/business')}
+          className="flex items-center justify-center w-12 h-12 bg-neutral-900 text-white rounded-2xl shadow-lg shadow-neutral-200 active:scale-90 transition-transform -mt-8 border-4 border-white"
+        >
+          <PlusCircle size={24} />
+        </button>
       </nav>
     </div>
   );
